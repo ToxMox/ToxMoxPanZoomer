@@ -50,6 +50,7 @@ When panning is active, your mouse position determines which part of the source 
 
 ## Tips
 
+- If you want to manipulate more than one source you can make a second copy of the python script and rename the file to something different from the original. Then in the OBS Scripts interface add the second script as well and configure as you please. The hotkeys in the OBS Hotkeys settings menu will show up twice. Bind as needed.
 - You can use a small Color Source (e.g., 400x400) and scale it to your desired size in the scene to define the panning area
 - Set 0 seconds for transition duration if you prefer instant zooming
 - If you experience ghosting/stutter, try increasing the Update Frequency
