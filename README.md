@@ -62,6 +62,7 @@ When panning is active, your mouse position determines which part of the source 
 ## Acknowledgement
 
 This script was inspired by https://github.com/BlankSourceCode/obs-zoom-to-mouse
+I am not a programmer. Just a very technical person. This script was generated largely by AI.
 
 ## License
 
