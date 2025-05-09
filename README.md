@@ -13,8 +13,9 @@ A powerful Python script for OBS Studio that enables smooth mouse-controlled pan
 - **Hotkey Control**: Toggle panning and zooming on/off using customizable OBS hotkeys
 
 ## Demo/Setup
+https://github.com/user-attachments/assets/fc5f0f8c-acfa-4ac4-9c35-959b0d9c3456
 
-
+https://github.com/user-attachments/assets/9b61c53e-ab09-447e-9b06-b76438e2003b
 
 ## Requirements
 
