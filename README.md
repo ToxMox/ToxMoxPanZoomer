@@ -1,3 +1,5 @@
+**NEW README NEEDS TO BE DONE. A lot has changed since all the stuff below. Bug fixes, new features, UI cleanup!**
+
 # Mouse Pan & Zoom for OBS Studio
 
 A powerful Python script for OBS Studio that enables smooth mouse-controlled panning and zooming for any source. Track your mouse position to control which part of your content is displayed, with customizable transition effects.
