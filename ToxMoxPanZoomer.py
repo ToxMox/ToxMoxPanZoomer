@@ -11,7 +11,7 @@ Copyright (c) 2025
 """
 
 # Global version number - increment after every change
-SCRIPT_VERSION = "9.0.8"
+SCRIPT_VERSION = "10.0.4"
 
 import obspython as obs
 import ctypes
@@ -56,11 +56,15 @@ config1 = {
     "zoom_out_duration": 0.3,   # Zoom OUT transition duration in seconds
     "source_cache": [],         # Cache for source items
     "viewport_cache": [],       # Cache for viewport items
+    "offset_x": 0,              # Offset X for panning (in pixels)
+    "offset_y": 0,              # Offset Y for panning (in pixels)
+    "viewport_alignment_correct": True, # Whether viewport alignment is correct (Top Left)
 }
 
 # Config 2 settings (initially a copy of config1)
 config2 = config1.copy()
 config2["enabled"] = False
+config2["viewport_alignment_correct"] = True # Whether viewport alignment is correct (Top Left)
 
 # Source information cache for config1
 source_settings1 = {
@@ -1025,34 +1029,36 @@ def update_pan_and_zoom():
         # STEP 1: Simple center-based calculation (without crop)
         # First calculate the precise source point that should be at viewport center
         
-        # Convert mouse percentage to source coordinates within visible area
-        visible_x = mouse_x_pct * S_w_visible
-        visible_y = mouse_y_pct * S_h_visible
+        # STEP 1: Account for crop in mouse coordinate mapping
+        # When a source is cropped, we need to adjust how mouse coordinates map to the source
         
-        # Calculate distance from center of visible area
-        center_x = S_w_visible / 2
-        center_y = S_h_visible / 2
-        offset_x = visible_x - center_x
-        offset_y = visible_y - center_y
+        # STEP 1: Map mouse position to the uncropped source coordinates
+        # First, we need to map the mouse percentage to the full source dimensions
+        # This gives us the position in the original, uncropped source
+        full_source_x = mouse_x_pct * S_w_native
+        full_source_y = mouse_y_pct * S_h_native
         
-        # Scale for scene coordinates
-        scene_offset_x = offset_x * scale_x
-        scene_offset_y = offset_y * scale_y
+        # STEP 2: Adjust for cropping
+        # We need to account for the crop by adjusting the coordinates
+        # The crop effectively shifts the visible area within the source
+        # We need to adjust our coordinates to account for this shift
         
-        # Calculate uncropped position that would place this point at viewport center
-        initial_pos_x = actual_viewport_center_x - scene_offset_x
-        initial_pos_y = actual_viewport_center_y - scene_offset_y
+        # Calculate the center of the visible (cropped) area in the original source coordinates
+        visible_center_x_in_source = crop_left + (S_w_visible / 2)
+        visible_center_y_in_source = crop_top + (S_h_visible / 2)
         
-        # STEP 2: DIRECT CROP ADJUSTMENT
-        # Based on the observed behavior, we need to apply HALF of the crop difference
+        # Calculate the offset from the center of the visible area
+        # This is how far the mouse is from the center of the visible area
+        offset_from_visible_center_x = full_source_x - visible_center_x_in_source
+        offset_from_visible_center_y = full_source_y - visible_center_y_in_source
         
-        # Flip the order and use half the adjustment (observed to be the correct amount)
-        crop_adjust_x = (crop_left - crop_right) * scale_x / 2
-        crop_adjust_y = (crop_top - crop_bottom) * scale_y / 2
+        # Scale the offset for scene coordinates
+        scene_offset_x = offset_from_visible_center_x * scale_x
+        scene_offset_y = offset_from_visible_center_y * scale_y
         
-        # Apply the crop adjustment - now adding instead of subtracting
-        adjusted_pos_x = initial_pos_x + crop_adjust_x
-        adjusted_pos_y = initial_pos_y + crop_adjust_y
+        # Calculate the position that would place this point at viewport center
+        adjusted_pos_x = actual_viewport_center_x - scene_offset_x
+        adjusted_pos_y = actual_viewport_center_y - scene_offset_y
         
         # STEP 3: Calculate visible bounds for clamping
         # Calculate scaled visible dimensions
@@ -1810,35 +1816,73 @@ def toggle_zooming(pressed):
 # OBS Script Hooks
 def script_description():
     return f"""<h2>ToxMox's Pan Zoomer</h2>
-Pans and zooms a selected Display source to be anchored to the Viewport based on mouse position with direct 1:1 mapping.<br>
-<small>Version {SCRIPT_VERSION}</small><br><br>
-<!-- Collapsible section - collapsed by default -->
-<details style="margin-top: 10px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 3px; padding: 0 5px;">
-  <summary style="cursor: pointer; font-weight: bold; padding: 5px; display: block;">Setup Instructions</summary>
-  <div style="margin-top: 8px; margin-left: 15px; padding-bottom: 5px;">
-  <b>1.</b> Select <b>Target Scene</b> from dropdown<br>
-  <b>2.</b> Choose <b>Target Source</b> to pan/zoom (Only tested with Display Capture sources, you may crop into the Display Source if you want)<br>
-  <b>3.</b> The script will set target source's <b>Positional Alignment</b> to <b>Center</b> (via Edit Transform)<br>
-  <b>4.</b> Select <b>Viewport Source</b> or use <b>Scene Dimensions</b> (Viewport Source needs Top Left setting for Positional Alignment, this is default when adding sources)<br>
-  <b>5.</b> Enable <b>Config 1 and/or Config 2</b> and set <b>Zoom Level</b> (1x-5x)<br>
-  <b>6.</b> Configure <b>Transition Durations</b> and <b>Update Frequency</b><br>
-  <b>7.</b> Use hotkeys to toggle panning/zooming (configure in OBS Settings - Hotkeys)<br>
-&nbsp;&nbsp;&nbsp;&nbsp;(Hotkey Names: <b>Toggle ToxMox Pan Zoomer - Config # - Panning</b> and<br>&nbsp;&nbsp;&nbsp;&nbsp;<b>Toggle ToxMox Pan Zoomer - Config # - Zooming</b>)<br>
-  <b>8.</b> Panning must be activated with hotkey before Zooming hotkey works</div>
-</details>
+Pans and zooms a selected Display Capture source to be anchored to the Viewport Source based on mouse position with direct 1:1 mapping. Cropped Display Capture sources supported. The Display Capture source must be scaled to the same size or larger than the Viewport.<br>
+<small>Version {SCRIPT_VERSION}</small>
 """
 
-# Add a global variable to store the selected monitor ID across reloads
+# Add global variables
 g_selected_monitor_id = 0
+g_show_instructions = False  # Track if instructions are visible
+
+# Store setup instructions text
+SETUP_INSTRUCTIONS = """<div style="margin-top: 8px; margin-bottom: 10px; padding-bottom: 5px;">
+<b>1.</b> Select <b>Target Scene</b>, <b>Target Source</b> to Pan/Zoom, <b>Viewport Source</b> from dropdowns.<br>
+<b>2.</b> The script will set target source's <b>Positional Alignment</b> to <b>Center</b> (via Edit Transform)<br>
+<b>3.</b> Viewport Source needs Top Left setting for Positional Alignment, this is default when adding sources)<br>
+<b>4.</b> Select the <b>Target Monitor</b> to track the mouse on.<br>
+<b>5.</b> Adjust offset values to shift from center the Target Source panning if desired.<br>
+<b>6.</b> Enable <b>Config 1 and/or Config 2</b> and set <b>Zoom Level</b> (1x-5x)<br>
+<b>7.</b> Configure <b>Transition Durations</b> and <b>Update Frequency</b><br>
+<b>8.</b> Use hotkeys to toggle panning/zooming (configure in OBS Settings - Hotkeys)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;(Hotkey Names: <b>Toggle ToxMox Pan Zoomer - Config # - Panning</b> and<br>&nbsp;&nbsp;&nbsp;&nbsp;<b>Toggle ToxMox Pan Zoomer - Config # - Zooming</b>)<br>
+<b>9.</b> Panning must be activated with hotkey before Zooming hotkey works</div>
+"""
+
+def toggle_instructions_visibility(props, prop):
+    """Toggle the visibility of setup instructions"""
+    global g_show_instructions, script_settings
+    
+    # Toggle the state
+    g_show_instructions = not g_show_instructions
+    
+    # Get the button and instruction text properties
+    button = obs.obs_properties_get(props, "toggle_instructions")
+    instructions_text = obs.obs_properties_get(props, "setup_instructions")
+    
+    # Update button text
+    if g_show_instructions:
+        obs.obs_property_set_description(button, "Hide Instructions")
+    else:
+        obs.obs_property_set_description(button, "Show Instructions")
+    
+    # Update text visibility
+    obs.obs_property_set_visible(instructions_text, g_show_instructions)
+    
+    # Update the settings if available
+    if script_settings:
+        obs.obs_data_set_bool(script_settings, "show_instructions", g_show_instructions)
+    
+    # Return true to trigger UI refresh
+    return True
 
 def script_properties():
     props = obs.obs_properties_create()
+    
+    # Add toggle instructions button at the top
+    toggle_button = obs.obs_properties_add_button(props, "toggle_instructions",
+                                          "Show Instructions", toggle_instructions_visibility)
+    
+    # Add instructions text (hidden by default)
+    instructions_text = obs.obs_properties_add_text(props, "setup_instructions",
+                                            SETUP_INSTRUCTIONS, obs.OBS_TEXT_INFO)
+    # Set initial visibility based on global state
+    obs.obs_property_set_visible(instructions_text, g_show_instructions)
     
     # Global Settings Group
     global_group = obs.obs_properties_create()
     
     # Add update FPS slider to global settings
-    fps_slider = obs.obs_properties_add_int_slider(global_group, "update_fps", "Update Frequency", 
+    fps_slider = obs.obs_properties_add_int_slider(global_group, "update_fps", "Update Frequency",
                                            30, 240, 10)
     obs.obs_property_int_set_suffix(fps_slider, " FPS")
     
@@ -1857,8 +1901,8 @@ def script_properties():
     config2_props = create_config_properties(2)
     obs.obs_properties_add_group(props, "config2", "Configuration 2", obs.OBS_GROUP_NORMAL, config2_props)
     
-    obs.obs_properties_add_text(props, "info_text", 
-                             "Set hotkeys for each configuration in OBS Settings > Hotkeys.", 
+    obs.obs_properties_add_text(props, "info_text",
+                             "Visit <a href='https://github.com/ToxMox/ToxMoxPanZoomer'>https://github.com/ToxMox/ToxMoxPanZoomer</a> for latest version of the script.",
                              obs.OBS_TEXT_INFO)
     return props
 
@@ -1873,7 +1917,7 @@ def create_config_properties(config_num):
     obs.obs_properties_add_bool(props, f"{config_prefix}enabled", f"Enable Config {config_num}")
     
     # Target Scene dropdown
-    scene_list = obs.obs_properties_add_list(props, f"{config_prefix}target_scene", "Target Scene", 
+    scene_list = obs.obs_properties_add_list(props, f"{config_prefix}target_scene", "Target Scene",
                                      obs.OBS_COMBO_TYPE_LIST, obs.OBS_COMBO_FORMAT_STRING)
     
     # Add "Select Scene" as first option
@@ -1895,11 +1939,11 @@ def create_config_properties(config_num):
     obs.obs_property_set_modified_callback(scene_list, on_target_scene_changed)
     
     # Target Source
-    target_source_list = obs.obs_properties_add_list(props, f"{config_prefix}source_name", "Target Source Name", 
+    target_source_list = obs.obs_properties_add_list(props, f"{config_prefix}source_name", "Target Source Name",
                                            obs.OBS_COMBO_TYPE_LIST, obs.OBS_COMBO_FORMAT_STRING)
     
     # Viewport Source
-    viewport_list = obs.obs_properties_add_list(props, f"{config_prefix}viewport_color_source_name", "Viewport Source Name", 
+    viewport_list = obs.obs_properties_add_list(props, f"{config_prefix}viewport_color_source_name", "Viewport Source Name",
                                            obs.OBS_COMBO_TYPE_LIST, obs.OBS_COMBO_FORMAT_STRING)
     
     # Get current config to check if we should show the lists
@@ -1953,21 +1997,35 @@ def create_config_properties(config_num):
         # Display just the name
         obs.obs_property_list_add_string(monitor_list, monitor["name"], value)
     
+    # Add offset x and y text boxes
+    obs.obs_properties_add_int(props, f"{config_prefix}offset_x", "Offset X (pixels)", -2000, 2000, 1)
+    obs.obs_properties_add_int(props, f"{config_prefix}offset_y", "Offset Y (pixels)", -2000, 2000, 1)
+    
     # Add zoom level slider
-    zoom_slider = obs.obs_properties_add_float_slider(props, f"{config_prefix}zoom_level", "Zoom Level", 
+    zoom_slider = obs.obs_properties_add_float_slider(props, f"{config_prefix}zoom_level", "Zoom Level",
                                                1.0, 5.0, 0.1)
     obs.obs_property_float_set_suffix(zoom_slider, "x")
     
     # Add zoom transition sliders
-    zoom_in_slider = obs.obs_properties_add_float_slider(props, f"{config_prefix}zoom_in_duration", 
-                                                  "Zoom In Transition Duration", 
+    zoom_in_slider = obs.obs_properties_add_float_slider(props, f"{config_prefix}zoom_in_duration",
+                                                  "Zoom In Transition Duration",
                                                   0.0, 1.0, 0.1)
     obs.obs_property_float_set_suffix(zoom_in_slider, " sec")
     
-    zoom_out_slider = obs.obs_properties_add_float_slider(props, f"{config_prefix}zoom_out_duration", 
-                                                   "Zoom Out Transition Duration", 
+    zoom_out_slider = obs.obs_properties_add_float_slider(props, f"{config_prefix}zoom_out_duration",
+                                                   "Zoom Out Transition Duration",
                                                    0.0, 1.0, 0.1)
     obs.obs_property_float_set_suffix(zoom_out_slider, " sec")
+    
+    # Add viewport alignment status indicator
+    current_config = config1 if config_num == 1 else config2
+    alignment_status = current_config.get("viewport_alignment_correct", True)
+    alignment_text = "✓ Viewport alignment correct (Top Left)" if alignment_status else "⚠ VIEWPORT ALIGNMENT INCORRECT! Set to Top Left in Edit Transform"
+    alignment_style = "color: green; font-weight: bold;" if alignment_status else "color: red; font-weight: bold; background-color: #fff3cd; padding: 3px;"
+    
+    obs.obs_properties_add_text(props, f"{config_prefix}alignment_status",
+                             f"<span style='{alignment_style}'>{alignment_text}</span>",
+                             obs.OBS_TEXT_INFO)
     
     return props
 
@@ -1975,6 +2033,7 @@ def script_defaults(settings_obj):
     """Set default values for script settings"""
     # Global Settings
     obs.obs_data_set_default_int(settings_obj, "update_fps", 60)
+    obs.obs_data_set_default_bool(settings_obj, "show_instructions", False)
     
     # Config 1 Defaults
     obs.obs_data_set_default_bool(settings_obj, "config1_enabled", False)
@@ -1983,14 +2042,18 @@ def script_defaults(settings_obj):
     obs.obs_data_set_default_double(settings_obj, "config1_zoom_in_duration", 0.3)
     obs.obs_data_set_default_double(settings_obj, "config1_zoom_out_duration", 0.3)
     obs.obs_data_set_default_string(settings_obj, "config1_viewport_color_source_name", USE_SCENE_DIMENSIONS)
+    obs.obs_data_set_default_int(settings_obj, "config1_offset_x", 0)
+    obs.obs_data_set_default_int(settings_obj, "config1_offset_y", 0)
     
     # Config 2 Defaults
-    obs.obs_data_set_default_bool(settings_obj, "config2_enabled", False) 
+    obs.obs_data_set_default_bool(settings_obj, "config2_enabled", False)
     obs.obs_data_set_default_string(settings_obj, "config2_monitor_id_string", "0:All Monitors (Virtual Screen)")
     obs.obs_data_set_default_double(settings_obj, "config2_zoom_level", 1.0)
     obs.obs_data_set_default_double(settings_obj, "config2_zoom_in_duration", 0.3)
     obs.obs_data_set_default_double(settings_obj, "config2_zoom_out_duration", 0.3)
     obs.obs_data_set_default_string(settings_obj, "config2_viewport_color_source_name", USE_SCENE_DIMENSIONS)
+    obs.obs_data_set_default_int(settings_obj, "config2_offset_x", 0)
+    obs.obs_data_set_default_int(settings_obj, "config2_offset_y", 0)
     
     # Use our global variable to initialize config 1 monitor ID if it's not 0
     global g_selected_monitor_id1
@@ -2016,10 +2079,13 @@ def script_defaults(settings_obj):
 
 def script_update(settings_obj):
     """Update script settings when changed in the properties dialog"""
-    global g_selected_monitor_id, script_settings
+    global g_selected_monitor_id, script_settings, g_show_instructions
     
     # Store the settings object for use throughout the script
     script_settings = settings_obj
+    
+    # Update instructions visibility state
+    g_show_instructions = obs.obs_data_get_bool(settings_obj, "show_instructions")
     
     # Store previous value of monitor_id before updating
     previous_monitor_id = settings["monitor_id"]
@@ -2142,6 +2208,10 @@ def script_update(settings_obj):
         zoom_out_duration1 = 1.0
     config1["zoom_out_duration"] = zoom_out_duration1
     
+    # Update offset values
+    config1["offset_x"] = obs.obs_data_get_int(settings_obj, "config1_offset_x")
+    config1["offset_y"] = obs.obs_data_get_int(settings_obj, "config1_offset_y")
+    
     # Update config2 zoom settings
     zoom_level2 = obs.obs_data_get_double(settings_obj, "config2_zoom_level")
     if zoom_level2 < 1.0:
@@ -2163,6 +2233,10 @@ def script_update(settings_obj):
     elif zoom_out_duration2 > 1.0:
         zoom_out_duration2 = 1.0
     config2["zoom_out_duration"] = zoom_out_duration2
+    
+    # Update offset values
+    config2["offset_x"] = obs.obs_data_get_int(settings_obj, "config2_offset_x")
+    config2["offset_y"] = obs.obs_data_get_int(settings_obj, "config2_offset_y")
     
     # For backwards compatibility - use values from config1
     settings["source_name"] = config1["source_name"]
@@ -2221,6 +2295,92 @@ def script_update(settings_obj):
     settings["monitor_id"] = config1["monitor_id"]
     g_selected_monitor_id = config1["monitor_id"]
             
+    # Update alignment status for both configs if viewport source is set
+    # This ensures the UI shows correct alignment status even before panning is toggled
+    if config1.get("viewport_color_source_name") and not is_use_scene_dimensions(config1.get("viewport_color_source_name")):
+        try:
+            viewport_source_name = config1.get("viewport_color_source_name")
+            viewport_source_uuid = config1.get("viewport_color_source_uuid")
+            viewport_found = False
+            viewport_scene_item = None
+            
+            # Try to find viewport by UUID first
+            if viewport_source_uuid:
+                viewport_source = find_source_by_uuid(viewport_source_uuid)
+                if viewport_source:
+                    # Now search for this source in scenes
+                    scenes = obs.obs_frontend_get_scenes()
+                    if scenes:
+                        for scene in scenes:
+                            viewport_scene_item = find_scene_item(scene, viewport_source_name)
+                            if viewport_scene_item:
+                                viewport_found = True
+                                config1["viewport_alignment_correct"] = check_viewport_alignment(
+                                    viewport_scene_item, viewport_source_name, 1
+                                )
+                                obs.obs_sceneitem_release(viewport_scene_item)
+                                break
+                        obs.source_list_release(scenes)
+                    obs.obs_source_release(viewport_source)
+            
+            # If not found by UUID, try by name
+            if not viewport_found and viewport_source_name:
+                scenes = obs.obs_frontend_get_scenes()
+                if scenes:
+                    for scene in scenes:
+                        viewport_scene_item = find_scene_item(scene, viewport_source_name)
+                        if viewport_scene_item:
+                            config1["viewport_alignment_correct"] = check_viewport_alignment(
+                                viewport_scene_item, viewport_source_name, 1
+                            )
+                            obs.obs_sceneitem_release(viewport_scene_item)
+                            break
+                    obs.source_list_release(scenes)
+        except Exception as e:
+            log_error(f"Error checking viewport alignment for Config 1 during update: {e}")
+    
+    # Same for config 2
+    if config2.get("viewport_color_source_name") and not is_use_scene_dimensions(config2.get("viewport_color_source_name")):
+        try:
+            viewport_source_name = config2.get("viewport_color_source_name")
+            viewport_source_uuid = config2.get("viewport_color_source_uuid")
+            viewport_found = False
+            viewport_scene_item = None
+            
+            # Try to find viewport by UUID first
+            if viewport_source_uuid:
+                viewport_source = find_source_by_uuid(viewport_source_uuid)
+                if viewport_source:
+                    # Now search for this source in scenes
+                    scenes = obs.obs_frontend_get_scenes()
+                    if scenes:
+                        for scene in scenes:
+                            viewport_scene_item = find_scene_item(scene, viewport_source_name)
+                            if viewport_scene_item:
+                                viewport_found = True
+                                config2["viewport_alignment_correct"] = check_viewport_alignment(
+                                    viewport_scene_item, viewport_source_name, 2
+                                )
+                                obs.obs_sceneitem_release(viewport_scene_item)
+                                break
+                        obs.source_list_release(scenes)
+                    obs.obs_source_release(viewport_source)
+            
+            # If not found by UUID, try by name
+            if not viewport_found and viewport_source_name:
+                scenes = obs.obs_frontend_get_scenes()
+                if scenes:
+                    for scene in scenes:
+                        viewport_scene_item = find_scene_item(scene, viewport_source_name)
+                        if viewport_scene_item:
+                            config2["viewport_alignment_correct"] = check_viewport_alignment(
+                                viewport_scene_item, viewport_source_name, 2
+                            )
+                            obs.obs_sceneitem_release(viewport_scene_item)
+                            break
+                    obs.source_list_release(scenes)
+        except Exception as e:
+            log_error(f"Error checking viewport alignment for Config 2 during update: {e}")
     
     # Handle monitor selection change for backward compatibility
     if previous_monitor_id != config1["monitor_id"]:
@@ -2510,11 +2670,12 @@ def script_save(settings_obj):
     # Ensure global hotkey IDs are accessible
     global toggle_pan_hotkey1_id, toggle_zoom_hotkey1_id, toggle_pan_hotkey2_id, toggle_zoom_hotkey2_id
     # Ensure global config settings are accessible for saving
-    global global_settings, config1, config2, g_selected_monitor_id1, g_selected_monitor_id2
+    global global_settings, config1, config2, g_selected_monitor_id1, g_selected_monitor_id2, g_show_instructions
 
 
     # Save Global Settings
     obs.obs_data_set_int(settings_obj, "update_fps", global_settings.get("update_fps", 60))
+    obs.obs_data_set_bool(settings_obj, "show_instructions", g_show_instructions)
 
     # Save Config 1 Settings
     obs.obs_data_set_bool(settings_obj, "config1_enabled", config1.get("enabled", False))
@@ -2548,6 +2709,8 @@ def script_save(settings_obj):
     obs.obs_data_set_double(settings_obj, "config1_zoom_level", config1.get("zoom_level", 1.0))
     obs.obs_data_set_double(settings_obj, "config1_zoom_in_duration", config1.get("zoom_in_duration", 0.3))
     obs.obs_data_set_double(settings_obj, "config1_zoom_out_duration", config1.get("zoom_out_duration", 0.3))
+    obs.obs_data_set_int(settings_obj, "config1_offset_x", config1.get("offset_x", 0))
+    obs.obs_data_set_int(settings_obj, "config1_offset_y", config1.get("offset_y", 0))
     
     monitor_id1 = config1.get("monitor_id", 0)
     monitors = get_monitor_info() # Re-fetch to ensure names are current
@@ -2588,6 +2751,8 @@ def script_save(settings_obj):
     obs.obs_data_set_double(settings_obj, "config2_zoom_level", config2.get("zoom_level", 1.0))
     obs.obs_data_set_double(settings_obj, "config2_zoom_in_duration", config2.get("zoom_in_duration", 0.3))
     obs.obs_data_set_double(settings_obj, "config2_zoom_out_duration", config2.get("zoom_out_duration", 0.3))
+    obs.obs_data_set_int(settings_obj, "config2_offset_x", config2.get("offset_x", 0))
+    obs.obs_data_set_int(settings_obj, "config2_offset_y", config2.get("offset_y", 0))
 
     monitor_id2 = config2.get("monitor_id", 0)
     monitor_name2 = "All Monitors (Virtual Screen)" # Default
@@ -3193,6 +3358,19 @@ def on_viewport_source_changed(props, prop, settings_obj):
             src_settings["viewport_scene_center_x"] = 0
             src_settings["viewport_scene_center_y"] = 0
             
+            # For scene dimensions, alignment is always considered correct (not applicable)
+            current_config["viewport_alignment_correct"] = True
+            
+            # Update the alignment status indicator in UI
+            alignment_text_prop = obs.obs_properties_get(props, f"{config_prefix}alignment_status")
+            if alignment_text_prop:
+                alignment_style = "color: green; font-weight: bold;"
+                alignment_text = "✓ Viewport alignment correct (Top Left)"
+                obs.obs_property_set_description(
+                    alignment_text_prop,
+                    f"<span style='{alignment_style}'>{alignment_text}</span>"
+                )
+            
             return True
         
         # Parse the source name and UUID
@@ -3205,6 +3383,57 @@ def on_viewport_source_changed(props, prop, settings_obj):
         # Update config settings
         current_config["viewport_color_source_name"] = source_name
         current_config["viewport_color_source_uuid"] = source_uuid
+        
+        # Check the viewport alignment immediately when source is selected
+        viewport_scene_item = None
+        viewport_found = False
+        
+        # Try to find source by UUID first if available
+        if source_uuid:
+            viewport_source = find_source_by_uuid(source_uuid)
+            if viewport_source:
+                # Now look for this in scenes
+                scenes = obs.obs_frontend_get_scenes()
+                if scenes:
+                    for scene in scenes:
+                        viewport_scene_item = find_scene_item(scene, source_name)
+                        if viewport_scene_item:
+                            viewport_found = True
+                            # Check alignment and store result
+                            current_config["viewport_alignment_correct"] = check_viewport_alignment(
+                                viewport_scene_item, source_name, config_num
+                            )
+                            obs.obs_sceneitem_release(viewport_scene_item)
+                            break
+                    obs.source_list_release(scenes)
+                obs.obs_source_release(viewport_source)
+        
+        # If not found by UUID, try by name
+        if not viewport_found and source_name:
+            scenes = obs.obs_frontend_get_scenes()
+            if scenes:
+                for scene in scenes:
+                    viewport_scene_item = find_scene_item(scene, source_name)
+                    if viewport_scene_item:
+                        # Check alignment and store result
+                        current_config["viewport_alignment_correct"] = check_viewport_alignment(
+                            viewport_scene_item, source_name, config_num
+                        )
+                        obs.obs_sceneitem_release(viewport_scene_item)
+                        break
+                obs.source_list_release(scenes)
+        
+        # Update the alignment status indicator in UI
+        alignment_text_prop = obs.obs_properties_get(props, f"{config_prefix}alignment_status")
+        if alignment_text_prop:
+            alignment_status = current_config.get("viewport_alignment_correct", True)
+            alignment_text = "✓ Viewport alignment correct (Top Left)" if alignment_status else "⚠ VIEWPORT ALIGNMENT INCORRECT! Set to Top Left in Edit Transform"
+            alignment_style = "color: green; font-weight: bold;" if alignment_status else "color: red; font-weight: bold; background-color: #fff3cd; padding: 3px;"
+            
+            obs.obs_property_set_description(
+                alignment_text_prop,
+                f"<span style='{alignment_style}'>{alignment_text}</span>"
+            )
         
         return True
     except Exception as e:
@@ -3564,34 +3793,40 @@ def update_pan_and_zoom_for_config(config, src_settings, current_scene_item):
         # STEP 1: Simple center-based calculation (without crop)
         # First calculate the precise source point that should be at viewport center
         
-        # Convert mouse percentage to source coordinates within visible area
-        visible_x = mouse_x_pct * S_w_visible
-        visible_y = mouse_y_pct * S_h_visible
+        # STEP 1: Account for crop in mouse coordinate mapping
+        # When a source is cropped, we need to adjust how mouse coordinates map to the source
         
-        # Calculate distance from center of visible area
-        center_x = S_w_visible / 2
-        center_y = S_h_visible / 2
-        offset_x = visible_x - center_x
-        offset_y = visible_y - center_y
+        # STEP 1: Map mouse position to the uncropped source coordinates
+        # First, we need to map the mouse percentage to the full source dimensions
+        # This gives us the position in the original, uncropped source
+        full_source_x = mouse_x_pct * S_w_native
+        full_source_y = mouse_y_pct * S_h_native
         
-        # Scale for scene coordinates
-        scene_offset_x = offset_x * scale_x
-        scene_offset_y = offset_y * scale_y
+        # STEP 2: Adjust for cropping
+        # We need to account for the crop by adjusting the coordinates
+        # The crop effectively shifts the visible area within the source
+        # We need to adjust our coordinates to account for this shift
         
-        # Calculate uncropped position that would place this point at viewport center
-        initial_pos_x = actual_viewport_center_x - scene_offset_x
-        initial_pos_y = actual_viewport_center_y - scene_offset_y
+        # Calculate the center of the visible (cropped) area in the original source coordinates
+        visible_center_x_in_source = crop_left + (S_w_visible / 2)
+        visible_center_y_in_source = crop_top + (S_h_visible / 2)
         
-        # STEP 2: DIRECT CROP ADJUSTMENT
-        # Based on the observed behavior, we need to apply HALF of the crop difference
+        # Calculate the offset from the center of the visible area
+        # This is how far the mouse is from the center of the visible area
+        offset_from_visible_center_x = full_source_x - visible_center_x_in_source
+        offset_from_visible_center_y = full_source_y - visible_center_y_in_source
         
-        # Flip the order and use half the adjustment (observed to be the correct amount)
-        crop_adjust_x = (crop_left - crop_right) * scale_x / 2
-        crop_adjust_y = (crop_top - crop_bottom) * scale_y / 2
+        # Scale the offset for scene coordinates
+        scene_offset_x = offset_from_visible_center_x * scale_x
+        scene_offset_y = offset_from_visible_center_y * scale_y
         
-        # Apply the crop adjustment - now adding instead of subtracting
-        adjusted_pos_x = initial_pos_x + crop_adjust_x
-        adjusted_pos_y = initial_pos_y + crop_adjust_y
+        # Calculate the position that would place this point at viewport center
+        adjusted_pos_x = actual_viewport_center_x - scene_offset_x
+        adjusted_pos_y = actual_viewport_center_y - scene_offset_y
+        
+        # Apply user-defined pixel offsets (not affected by zoom)
+        adjusted_pos_x += config.get("offset_x", 0)
+        adjusted_pos_y += config.get("offset_y", 0)
         
         # STEP 3: Calculate visible bounds for clamping
         # Calculate scaled visible dimensions
@@ -3786,6 +4021,39 @@ def toggle_zooming2(pressed):
     """Toggle zooming on or off for config 2"""
     toggle_zooming_for_config(pressed, config2, source_settings2, g_current_scene_item2, 2)
 
+# Helper function to check viewport alignment (Top Left)
+def check_viewport_alignment(viewport_scene_item, source_name, config_num):
+    """Check if viewport source has correct Top Left (0x0005) alignment"""
+    if not viewport_scene_item:
+        return False
+        
+    try:
+        # Get alignment of the viewport scene item
+        alignment = obs.obs_sceneitem_get_alignment(viewport_scene_item)
+        
+        # Define alignment constants
+        OBS_ALIGN_LEFT = 0x0001
+        OBS_ALIGN_TOP = 0x0004
+        expected_alignment = OBS_ALIGN_LEFT | OBS_ALIGN_TOP  # Top Left = 0x0005
+        
+        # Check if alignment matches expected Top Left (0x0005)
+        is_correct = (alignment == expected_alignment)
+        
+        if not is_correct:
+            # Display a prominent warning message
+            log_error(f"▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓")
+            log_error(f"▓ VIEWPORT ALIGNMENT ERROR - Config {config_num}")
+            log_error(f"▓ Viewport source '{source_name}' alignment incorrect!")
+            log_error(f"▓ Current alignment: 0x{alignment:x}, Expected: 0x0005")
+            log_error(f"▓ Please set Positional Alignment to TOP LEFT")
+            log_error(f"▓ (Edit Transform > Positional Alignment > Top Left")
+            log_error(f"▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓")
+        
+        return is_correct
+    except Exception as e:
+        log_error(f"Error checking viewport alignment: {e}")
+        return False
+
 # Generic toggle_panning function that works with any config
 def toggle_panning_for_config(pressed, config, src_settings, current_scene_item, config_num):
     """Toggle panning on or off for a specific config"""
@@ -3856,6 +4124,10 @@ def toggle_panning_for_config(pressed, config, src_settings, current_scene_item,
     
     zoom_out_duration = obs.obs_data_get_double(script_settings, f"config{config_num}_zoom_out_duration")
     config["zoom_out_duration"] = max(0.0, min(1.0, zoom_out_duration))
+    
+    # Update offset values
+    config["offset_x"] = obs.obs_data_get_int(script_settings, f"config{config_num}_offset_x")
+    config["offset_y"] = obs.obs_data_get_int(script_settings, f"config{config_num}_offset_y")
     
     # Monitor settings
     monitor_id_string = obs.obs_data_get_string(script_settings, f"config{config_num}_monitor_id_string")
@@ -4047,6 +4319,9 @@ def toggle_panning_for_config(pressed, config, src_settings, current_scene_item,
             
             # If found in a scene, get its bounds
             if viewport_found_in_scene and viewport_scene_item:
+                # Check the viewport alignment and store the result in the config
+                config["viewport_alignment_correct"] = check_viewport_alignment(viewport_scene_item, viewport_source_name, config_num)
+                
                 # Get position
                 pos = obs.vec2()
                 obs.obs_sceneitem_get_pos(viewport_scene_item, pos)
@@ -4390,6 +4665,10 @@ def toggle_zooming_for_config(pressed, config, src_settings, current_scene_item,
     
     zoom_out_duration = obs.obs_data_get_double(script_settings, f"config{config_num}_zoom_out_duration")
     config["zoom_out_duration"] = max(0.0, min(1.0, zoom_out_duration))
+    
+    # Update offset values
+    config["offset_x"] = obs.obs_data_get_int(script_settings, f"config{config_num}_offset_x")
+    config["offset_y"] = obs.obs_data_get_int(script_settings, f"config{config_num}_offset_y")
     
     # Check if panning is enabled (required for zooming)
     if not config.get("pan_enabled", False):
