@@ -1,28 +1,28 @@
-**NEW README NEEDS TO BE DONE. A lot has changed since all the stuff below. Bug fixes, new features, UI cleanup!**
-
-# Mouse Pan & Zoom for OBS Studio
+# ToxMox's Pan Zoomer for OBS Studio
 
 A powerful Python script for OBS Studio that enables smooth mouse-controlled panning and zooming for any source. Track your mouse position to control which part of your content is displayed, with customizable transition effects.
 
+**Version: 10.0.4**
+
 ## Features
 
+- **Dual Configuration Support**: Control two different sources independently with separate settings
 - **Direct 1:1 Mouse Control**: Pan any source by moving your mouse - the source follows your cursor in real-time
 - **Customizable Zoom**: Easily zoom in/out with configurable levels from 1x to 5x
 - **Smooth Transitions**: Professional animated transitions when toggling zoom with configurable durations
-- **Multi-Monitor Support**: Works across multiple displays with proper monitor selection
+- **Multi-Monitor Support**: Enhanced detection and support for multiple displays with proper monitor selection
 - **Performance Optimized**: Configurable update frequency (30-240 FPS) to match your display refresh rate
-- **Flexible Viewport Definition**: Define the panning area using a color source scaled to any size in your scene
-- **Hotkey Control**: Toggle panning and zooming on/off using customizable OBS hotkeys
-
-## Demo/Setup
-https://github.com/user-attachments/assets/fc5f0f8c-acfa-4ac4-9c35-959b0d9c3456
-
-https://github.com/user-attachments/assets/9b61c53e-ab09-447e-9b06-b76438e2003b
+- **Flexible Viewport Definition**: Define the panning area using a color source or use scene dimensions directly
+- **Hotkey Control**: Toggle panning and zooming on/off using customizable OBS hotkeys for each configuration
+- **Direct Source Mode**: Support for plugin sources with automatic property detection
+- **Improved UI**: Toggle instructions visibility and better organized settings interface
+- **Enhanced Error Handling**: Robust error recovery and resource management
 
 ## Requirements
 
-- OBS Studio 31.0+ & Python
-- Tested with Windows 11 and Python version 3.12.10 x64 installed
+- OBS Studio 31.0+
+- Python version 3.12.10 x64 or compatible
+- Tested with Windows 11
 
 ## Installation
 
@@ -34,36 +34,67 @@ https://github.com/user-attachments/assets/9b61c53e-ab09-447e-9b06-b76438e2003b
 
 ## Configuration
 
-1. **Target Source**: Select which source you want to pan and zoom
-2. **Viewport Source**: Create a Color Source in OBS and scale it in your scene to define the panning area, then select it here
-3. **Monitor Selection**: Choose which monitor to track mouse movement on
-4. **Zoom Level**: Set your desired zoom level (1x to 5x)
-5. **Transition Durations**: Configure separate durations for zoom-in and zoom-out animations
-6. **Update Frequency**: Recommend starting at same fps as OBS output fps or higher as needed for smoother movement
+### Global Settings
+- **Update Frequency**: Set the refresh rate for mouse tracking (30-240 FPS)
+- **Refresh Scenes and Sources**: Button to refresh all dropdown lists if sources change
+
+### Configuration 1 & 2
+Each configuration allows you to control a separate source with these settings:
+
+1. **Enable Config**: Master switch for this configuration set
+2. **Target Scene**: Select which scene contains your sources
+3. **Target Source**: Select which source you want to pan and zoom
+4. **Viewport Source**: Either:
+   - Select a Color Source that defines the panning area
+   - Use "Use Scene Dimensions" to use the entire scene as the viewport
+5. **Target Monitor**: Choose which monitor to track mouse movement on
+6. **Offset X/Y**: Fine-tune the panning position with pixel offsets
+7. **Zoom Level**: Set your desired zoom level (1x to 5x)
+8. **Transition Durations**: Configure separate durations for zoom-in and zoom-out animations
 
 ## Usage
 
-1. After configuration, enable the script with the **Enable Mouse Pan** checkbox
+1. After configuration, enable the desired config(s) with the **Enable Config** checkbox
 2. Set up hotkeys in OBS Settings → Hotkeys for:
-   - **Toggle ToxMox's Pan Zoomer - Panning**: Starts/stops mouse tracking
-   - **Toggle Toxmox's Pan Zoomer - Zooming**: Activates/deactivates zoom with smooth transitions (Panning Hotkey must be toggled on for Zoom to work)
+   - **Toggle ToxMox Pan Zoomer - Config 1 - Panning**: Starts/stops mouse tracking for Config 1
+   - **Toggle ToxMox Pan Zoomer - Config 1 - Zooming**: Activates/deactivates zoom for Config 1
+   - **Toggle ToxMox Pan Zoomer - Config 2 - Panning**: Starts/stops mouse tracking for Config 2
+   - **Toggle ToxMox Pan Zoomer - Config 2 - Zooming**: Activates/deactivates zoom for Config 2
 
 When panning is active, your mouse position determines which part of the source is shown within the viewport area. Zooming works in conjunction with panning and scales the content around your mouse position.
 
+**Important**: Panning must be activated with hotkey before Zooming hotkey works.
+
+## Setup Instructions
+
+1. Select **Target Scene**, **Target Source** to Pan/Zoom, **Viewport Source** from dropdowns
+2. The script will set target source's **Positional Alignment** to **Center** (via Edit Transform)
+3. Viewport Source needs Top Left setting for Positional Alignment (this is default when adding sources)
+4. Select the **Target Monitor** to track the mouse on
+5. Adjust offset values to shift from center the Target Source panning if desired
+6. Enable **Config 1 and/or Config 2** and set **Zoom Level** (1x-5x)
+7. Configure **Transition Durations** and **Update Frequency**
+8. Use hotkeys to toggle panning/zooming (configure in OBS Settings - Hotkeys)
+9. Panning must be activated with hotkey before Zooming hotkey works
+
 ## Tips
 
-- If you want to manipulate more than one source you can make a second copy of the python script and rename the file to something different from the original. Then in the OBS Scripts interface add the second script as well and configure as you please. The hotkeys in the OBS Hotkeys settings menu will show up twice. Bind as needed.
-- You can use a small Color Source (e.g., 400x400) and scale it to your desired size in the scene to define the panning area
+- You can now control two different sources independently using Config 1 and Config 2
+- The "Use Scene Dimensions" option eliminates the need to create a separate color source for the viewport
+- If you experience alignment issues, the script will warn you with a message to set the viewport source alignment to Top Left
 - Set 0 seconds for transition duration if you prefer instant zooming
 - If you experience ghosting/stutter, try increasing the Update Frequency
+- For plugin sources, the script will automatically detect the appropriate properties to modify
 
 ## Troubleshooting
 
 - If OBS crashes on startup, check your Python installation is compatible
-- Enable Debug Mode for detailed logging to solve complex issues
+- If viewport alignment is incorrect, you'll see a warning in the script UI - set the viewport source alignment to Top Left in Edit Transform
+- If sources aren't appearing in dropdowns, use the "Refresh Scenes and Sources" button
 
-## Acknowledgement
+## Acknowledgements
 
+- Huge thanks to Jhuderis of BEACN who inspired me to make this script, gave me feature ideas, and helped test. Check out https://www.beacn.com/ for some awesome audio equipment geared towards streamers!
 - This script was inspired by https://github.com/BlankSourceCode/obs-zoom-to-mouse
 - I am not a programmer. Just a very technical person. This script was generated largely by AI.
 
@@ -91,4 +122,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-``` 
