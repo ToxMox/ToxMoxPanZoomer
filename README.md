@@ -1,6 +1,6 @@
 # ToxMox's Pan Zoomer for OBS Studio
 
-A powerful Python script for OBS Studio that enables smooth mouse-controlled panning and zooming for any source. Track your mouse position to control which part of your content is displayed, with customizable transition effects.
+A powerful Python script for OBS Studio that enables smooth mouse-controlled panning and zooming for display sources. Track your mouse position to control which part of your content is displayed, with customizable zoom transition speed.
 
 **Version: 10.0.4**
 
@@ -17,6 +17,16 @@ A powerful Python script for OBS Studio that enables smooth mouse-controlled pan
 - **Direct Source Mode**: Support for plugin sources with automatic property detection
 - **Improved UI**: Toggle instructions visibility and better organized settings interface
 - **Enhanced Error Handling**: Robust error recovery and resource management
+
+Script settings example:
+
+<img src="https://github.com/user-attachments/assets/7d63a020-3707-4e5d-840a-ab2a1a312202" width="300px">
+
+Quick demo:
+
+https://github.com/user-attachments/assets/f048b893-2e64-43ee-886c-bb458b5cda24
+
+
 
 ## Requirements
 
