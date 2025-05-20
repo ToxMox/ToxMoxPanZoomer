@@ -2,21 +2,20 @@
 
 A powerful Python script for OBS Studio that enables smooth mouse-controlled panning and zooming for display sources. Track your mouse position to control which part of your content is displayed, with customizable zoom transition speed.
 
-**Version: 10.0.4**
+**Version: 10.1.2**
 
 ## Features
 
 - **Dual Configuration Support**: Control two different sources independently with separate settings
 - **Direct 1:1 Mouse Control**: Pan any source by moving your mouse - the source follows your cursor in real-time
 - **Customizable Zoom**: Easily zoom in/out with configurable levels from 1x to 5x
-- **Smooth Transitions**: Professional animated transitions when toggling zoom with configurable durations
+- **Smooth Transitions**: Simple smooth transitions when toggling zoom with configurable durations
 - **Multi-Monitor Support**: Enhanced detection and support for multiple displays with proper monitor selection
-- **Performance Optimized**: Configurable update frequency (30-240 FPS) to match your display refresh rate
+- **Performance Optimized**: Configurable update frequency (30-240 FPS)
 - **Flexible Viewport Definition**: Define the panning area using a color source or use scene dimensions directly
 - **Hotkey Control**: Toggle panning and zooming on/off using customizable OBS hotkeys for each configuration
-- **Direct Source Mode**: Support for plugin sources with automatic property detection
-- **Improved UI**: Toggle instructions visibility and better organized settings interface
-- **Enhanced Error Handling**: Robust error recovery and resource management
+- **Direct Source Mode**: Support for plugin sources
+- **Offset Support**: Allow changing the mouse tracking center point inside the viewport
 
 Script settings example:
 
