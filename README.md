@@ -2,7 +2,7 @@
 
 A powerful Python script for OBS Studio that enables smooth mouse-controlled panning and zooming for display sources. Track your mouse position to control which part of your content is displayed, with customizable zoom transition speed.
 
-**Version: 10.1.2**
+**Version: 10.4.9**
 
 ## Features
 
@@ -13,15 +13,18 @@ A powerful Python script for OBS Studio that enables smooth mouse-controlled pan
 - **Multi-Monitor Support**: Enhanced detection and support for multiple displays with proper monitor selection
 - **Performance Optimized**: Configurable update frequency (30-240 FPS)
 - **Flexible Viewport Definition**: Define the panning area using a color source or use scene dimensions directly
-- **Hotkey Control**: Toggle panning and zooming on/off using customizable OBS hotkeys for each configuration
+- **Hotkey Control**: Toggle panning, zooming, deadzone, and pause using customizable OBS hotkeys for each configuration
 - **Direct Source Mode**: Support for plugin sources
 - **Offset Support**: Allow changing the mouse tracking center point inside the viewport
+- **Deadzone Feature**: Create a rectangular area where the mouse doesn't cause panning until pushed to the edges
+- **Pause Feature**: Temporarily freeze panning and zooming while keeping the feature enabled
+- **Collapsible UI Sections**: Streamlined interface with collapsible sections for better organization
 
 Script settings example:
 
 <img src="https://github.com/user-attachments/assets/7d63a020-3707-4e5d-840a-ab2a1a312202" width="300px">
 
-Quick demo:
+Quick basic demo (just shows simple panning and zooming, I'll make some more demo videos eventually showing Deadzone, Offsets, and Pause features etc.):
 
 https://github.com/user-attachments/assets/f048b893-2e64-43ee-886c-bb458b5cda24
 
@@ -43,10 +46,6 @@ https://github.com/user-attachments/assets/f048b893-2e64-43ee-886c-bb458b5cda24
 
 ## Configuration
 
-### Global Settings
-- **Update Frequency**: Set the refresh rate for mouse tracking (30-240 FPS)
-- **Refresh Scenes and Sources**: Button to refresh all dropdown lists if sources change
-
 ### Configuration 1 & 2
 Each configuration allows you to control a separate source with these settings:
 
@@ -60,31 +59,38 @@ Each configuration allows you to control a separate source with these settings:
 6. **Offset X/Y**: Fine-tune the panning position with pixel offsets
 7. **Zoom Level**: Set your desired zoom level (1x to 5x)
 8. **Transition Durations**: Configure separate durations for zoom-in and zoom-out animations
+9. **Deadzone Settings**:
+   - Enable/disable deadzone functionality
+   - Set horizontal and vertical deadzone percentages
+   - Configure transition duration when disabling deadzone
 
-## Usage
+### Global Settings
+- **Update Frequency**: Set the refresh rate for mouse tracking (30-240 FPS)
+- **Refresh Scenes and Sources**: Button to refresh all dropdown lists if sources change
 
-1. After configuration, enable the desired config(s) with the **Enable Config** checkbox
-2. Set up hotkeys in OBS Settings → Hotkeys for:
-   - **Toggle ToxMox Pan Zoomer - Config 1 - Panning**: Starts/stops mouse tracking for Config 1
-   - **Toggle ToxMox Pan Zoomer - Config 1 - Zooming**: Activates/deactivates zoom for Config 1
-   - **Toggle ToxMox Pan Zoomer - Config 2 - Panning**: Starts/stops mouse tracking for Config 2
-   - **Toggle ToxMox Pan Zoomer - Config 2 - Zooming**: Activates/deactivates zoom for Config 2
+## Setup and Usage
 
-When panning is active, your mouse position determines which part of the source is shown within the viewport area. Zooming works in conjunction with panning and scales the content around your mouse position.
-
-**Important**: Panning must be activated with hotkey before Zooming hotkey works.
-
-## Setup Instructions
-
-1. Select **Target Scene**, **Target Source** to Pan/Zoom, **Viewport Source** from dropdowns
+1. Select **Target Scene**, **Target Source** to Pan/Zoom, **Viewport Source** from dropdowns.
 2. The script will set target source's **Positional Alignment** to **Center** (via Edit Transform)
 3. Viewport Source needs Top Left setting for Positional Alignment (this is default when adding sources)
-4. Select the **Target Monitor** to track the mouse on
-5. Adjust offset values to shift from center the Target Source panning if desired
-6. Enable **Config 1 and/or Config 2** and set **Zoom Level** (1x-5x)
-7. Configure **Transition Durations** and **Update Frequency**
-8. Use hotkeys to toggle panning/zooming (configure in OBS Settings - Hotkeys)
-9. Panning must be activated with hotkey before Zooming hotkey works
+4. Select the **Target Monitor** to track the mouse on.
+5. Adjust **Offset X/Y** values to shift the panning center if desired.
+6. Configure **Deadzone** percentages to create an area where mouse movement doesn't affect panning.
+7. Enable **Config 1 and/or Config 2** and set **Zoom Level** (1x-5x)
+8. Configure **Transition Durations** for zoom and deadzone transitions.
+9. Set **Update Frequency** in Global Settings for smoother or more efficient performance.
+10. Use hotkeys to toggle features (configure in OBS Settings - Hotkeys):
+    - **Toggle ToxMox Pan Zoomer - Config # - Panning**
+      Enables/disables mouse tracking (must be enabled first)
+    - **Toggle ToxMox Pan Zoomer - Config # - Zooming**
+      Enables/disables zoom with smooth transitions
+    - **Toggle ToxMox Pan Zoomer - Config # - Deadzone**
+      Creates a non-responsive area around mouse position
+    - **Toggle ToxMox Pan Zoomer - Config # - Pause**
+      Freezes current position regardless of mouse movement
+11. Note: Panning must be activated with hotkey before other features will work
+
+When panning is active, your mouse position determines which part of the source is shown within the viewport area. Zooming works in conjunction with panning and scales the content around your mouse position.
 
 ## Tips
 
@@ -94,6 +100,10 @@ When panning is active, your mouse position determines which part of the source 
 - Set 0 seconds for transition duration if you prefer instant zooming
 - If you experience ghosting/stutter, try increasing the Update Frequency
 - For plugin sources, the script will automatically detect the appropriate properties to modify
+- Use the Deadzone feature when you want more stable panning with less sensitivity to small mouse movements
+- The Pause feature is useful when you need to temporarily freeze the current view while keeping panning enabled
+- Collapsible UI sections help keep the interface organized - you can expand only the sections you need
+- The Deadzone % settings refer to the percent from center to edge of the full Target Source. I'd like to make this use the Viewport Source instead for the calculation but I couldn't get it to work that way. (if you're a genius python person feel free to tell me how to make that work)
 
 ## Troubleshooting
 
@@ -105,7 +115,7 @@ When panning is active, your mouse position determines which part of the source 
 
 - Huge thanks to Jhuderis of BEACN who inspired me to make this script, gave me feature ideas, and helped test. Check out https://www.beacn.com/ for some awesome audio equipment geared towards streamers!
 - This script was inspired by https://github.com/BlankSourceCode/obs-zoom-to-mouse
-- I am not a programmer. Just a very technical person. This script was generated largely by AI.
+- I am not a programmer. Just a very technical person who kind of undestands code. This script was generated largely by AI.
 
 ## License
 
