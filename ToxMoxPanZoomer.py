@@ -11,7 +11,7 @@ Copyright (c) 2025
 """
 
 # Global version number - increment after every change
-SCRIPT_VERSION = "10.1.2"
+SCRIPT_VERSION = "10.4.9"
 
 import obspython as obs
 import ctypes
@@ -46,7 +46,7 @@ config1 = {
     "target_scene_uuid": "",    # UUID of the scene
     "pan_enabled": False,       # Whether panning is enabled
     "zoom_enabled": False,      # Whether zooming is enabled
-    "zoom_level": 1.0,          # Zoom level (1.0 to 5.0)
+    "zoom_level": 1.5,          # Zoom level (1.0 to 5.0)
     "scene_name": "",           # Current scene where the source lives
     "monitor_id": 0,            # Target monitor for mouse tracking
     "direct_source_cache": None,      # Cache for direct source reference
@@ -59,12 +59,22 @@ config1 = {
     "offset_x": 0,              # Offset X for panning (in pixels)
     "offset_y": 0,              # Offset Y for panning (in pixels)
     "viewport_alignment_correct": True, # Whether viewport alignment is correct (Top Left)
+    "deadzone_enabled": False,  # Whether deadzone is enabled
+    "deadzone_h_pct": 10,       # Deadzone horizontal percentage (0-100)
+    "deadzone_v_pct": 10,       # Deadzone vertical percentage (0-100)
+    "deadzone_off_transition_duration": 0.3, # Transition duration when disabling deadzone (0-1 seconds)
+    "pause_enabled": False,     # Whether pause is enabled
 }
 
 # Config 2 settings (initially a copy of config1)
 config2 = config1.copy()
 config2["enabled"] = False
 config2["viewport_alignment_correct"] = True # Whether viewport alignment is correct (Top Left)
+config2["deadzone_enabled"] = False
+config2["deadzone_h_pct"] = 10
+config2["deadzone_v_pct"] = 10
+config2["deadzone_off_transition_duration"] = 0.3
+config2["pause_enabled"] = False
 
 # Source information cache for config1
 source_settings1 = {
@@ -91,6 +101,9 @@ source_settings1 = {
     "transition_target_zoom": 1.0,  # Target zoom level
     "transition_duration": 0.3,   # Current transition duration (set dynamically)
     "is_zooming_in": False,       # Whether we're zooming in or out
+    # Deadzone center coordinates (0.5, 0.5 is center of screen)
+    "deadzone_center_x": 0.5,     # Horizontal center of deadzone
+    "deadzone_center_y": 0.5,     # Vertical center of deadzone
 }
 
 # Source information cache for config2 (copy)
@@ -119,6 +132,10 @@ toggle_pan_hotkey1_id = None
 toggle_zoom_hotkey1_id = None
 toggle_pan_hotkey2_id = None
 toggle_zoom_hotkey2_id = None
+toggle_deadzone_hotkey1_id = None
+toggle_deadzone_hotkey2_id = None
+toggle_pause_hotkey1_id = None
+toggle_pause_hotkey2_id = None
 
 # Current scene items for each config
 g_current_scene_item1 = None
@@ -134,6 +151,7 @@ g_exit_handler_registered = False  # Flag to track if exit handler is registered
 g_in_exit_handler = False  # Flag to prevent recursive cleanup
 g_is_obs_loaded = False  # Flag to track if OBS is fully loaded
 g_emergency_cleanup_done = False  # Flag to track if emergency cleanup has been done
+g_pending_config_refresh = False  # Flag to indicate configs need refreshing after OBS is loaded
 
 # Store OBS version information
 g_obs_version_major = 0
@@ -1496,6 +1514,8 @@ Pans and zooms a selected Display Capture source to be anchored to the Viewport 
 # Add global variables
 g_selected_monitor_id = 0
 g_show_instructions = False  # Track if instructions are visible
+g_show_config1 = False  # Track if Configuration 1 is visible (hidden by default)
+g_show_config2 = False  # Track if Configuration 2 is visible (hidden by default)
 
 # Store setup instructions text
 SETUP_INSTRUCTIONS = """<div style="margin-top: 8px; margin-bottom: 10px; padding-bottom: 5px;">
@@ -1503,12 +1523,21 @@ SETUP_INSTRUCTIONS = """<div style="margin-top: 8px; margin-bottom: 10px; paddin
 <b>2.</b> The script will set target source's <b>Positional Alignment</b> to <b>Center</b> (via Edit Transform)<br>
 <b>3.</b> Viewport Source needs Top Left setting for Positional Alignment, this is default when adding sources)<br>
 <b>4.</b> Select the <b>Target Monitor</b> to track the mouse on.<br>
-<b>5.</b> Adjust offset values to shift from center the Target Source panning if desired.<br>
-<b>6.</b> Enable <b>Config 1 and/or Config 2</b> and set <b>Zoom Level</b> (1x-5x)<br>
-<b>7.</b> Configure <b>Transition Durations</b> and <b>Update Frequency</b><br>
-<b>8.</b> Use hotkeys to toggle panning/zooming (configure in OBS Settings - Hotkeys)<br>
-&nbsp;&nbsp;&nbsp;&nbsp;(Hotkey Names: <b>Toggle ToxMox Pan Zoomer - Config # - Panning</b> and<br>&nbsp;&nbsp;&nbsp;&nbsp;<b>Toggle ToxMox Pan Zoomer - Config # - Zooming</b>)<br>
-<b>9.</b> Panning must be activated with hotkey before Zooming hotkey works</div>
+<b>5.</b> Adjust <b>Offset X/Y</b> values to shift the panning center if desired.<br>
+<b>6.</b> Configure <b>Deadzone</b> percentages to create an area where mouse movement doesn't affect panning.<br>
+<b>7.</b> Enable <b>Config 1 and/or Config 2</b> and set <b>Zoom Level</b> (1x-5x)<br>
+<b>8.</b> Configure <b>Transition Durations</b> for zoom and deadzone transitions.<br>
+<b>9.</b> Set <b>Update Frequency</b> in Global Settings for smoother or more efficient performance.<br>
+<b>10.</b> Use hotkeys to toggle features (configure in OBS Settings - Hotkeys):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;• <b>Toggle ToxMox Pan Zoomer - Config # - Panning</b><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Enables/disables mouse tracking (must be enabled first)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;• <b>Toggle ToxMox Pan Zoomer - Config # - Zooming</b><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Enables/disables zoom with smooth transitions<br>
+&nbsp;&nbsp;&nbsp;&nbsp;• <b>Toggle ToxMox Pan Zoomer - Config # - Deadzone</b><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Creates a non-responsive area around mouse position<br>
+&nbsp;&nbsp;&nbsp;&nbsp;• <b>Toggle ToxMox Pan Zoomer - Config # - Pause</b><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Freezes current position regardless of mouse movement<br>
+<b>11.</b> Note: Panning must be activated with hotkey before other features will work</div>
 """
 
 def toggle_instructions_visibility(props, prop):
@@ -1538,12 +1567,73 @@ def toggle_instructions_visibility(props, prop):
     # Return true to trigger UI refresh
     return True
 
+def toggle_config1_visibility(props, prop):
+    """Toggle the visibility of Configuration 1"""
+    global g_show_config1, script_settings
+    
+    # Toggle the state
+    g_show_config1 = not g_show_config1
+    
+    # Get the button and config group properties
+    button = obs.obs_properties_get(props, "toggle_config1")
+    config_group = obs.obs_properties_get(props, "config1")
+    
+    # Update button text
+    if g_show_config1:
+        obs.obs_property_set_description(button, "Hide Configuration 1")
+    else:
+        obs.obs_property_set_description(button, "Show Configuration 1")
+    
+    # Update group visibility
+    obs.obs_property_set_visible(config_group, g_show_config1)
+    
+    # Update the settings if available
+    if script_settings:
+        obs.obs_data_set_bool(script_settings, "show_config1", g_show_config1)
+    
+    # Return true to trigger UI refresh
+    return True
+
+def toggle_config2_visibility(props, prop):
+    """Toggle the visibility of Configuration 2"""
+    global g_show_config2, script_settings
+    
+    # Toggle the state
+    g_show_config2 = not g_show_config2
+    
+    # Get the button and config group properties
+    button = obs.obs_properties_get(props, "toggle_config2")
+    config_group = obs.obs_properties_get(props, "config2")
+    
+    # Update button text
+    if g_show_config2:
+        obs.obs_property_set_description(button, "Hide Configuration 2")
+    else:
+        obs.obs_property_set_description(button, "Show Configuration 2")
+    
+    # Update group visibility
+    obs.obs_property_set_visible(config_group, g_show_config2)
+    
+    # Update the settings if available
+    if script_settings:
+        obs.obs_data_set_bool(script_settings, "show_config2", g_show_config2)
+    
+    # Return true to trigger UI refresh
+    return True
+
 def script_properties():
+    global g_schedule_ui_refresh
     props = obs.obs_properties_create()
     
     # Add toggle instructions button at the top
     toggle_button = obs.obs_properties_add_button(props, "toggle_instructions",
                                           "Show Instructions", toggle_instructions_visibility)
+    
+    # Update button text based on current state
+    if g_show_instructions:
+        obs.obs_property_set_description(toggle_button, "Hide Instructions")
+    else:
+        obs.obs_property_set_description(toggle_button, "Show Instructions")
     
     # Add instructions text (hidden by default)
     instructions_text = obs.obs_properties_add_text(props, "setup_instructions",
@@ -1551,7 +1641,27 @@ def script_properties():
     # Set initial visibility based on global state
     obs.obs_property_set_visible(instructions_text, g_show_instructions)
     
-    # Global Settings Group
+    # Add toggle button for Configuration 1
+    toggle_config1_button = obs.obs_properties_add_button(props, "toggle_config1",
+                                           "Show Configuration 1", toggle_config1_visibility)
+    
+    # Create Config 1 Properties Group (without title)
+    config1_props = create_config_properties(1)
+    config1_group = obs.obs_properties_add_group(props, "config1", "", obs.OBS_GROUP_NORMAL, config1_props)
+    # Set initial visibility based on global state
+    obs.obs_property_set_visible(config1_group, g_show_config1)
+    
+    # Add toggle button for Configuration 2
+    toggle_config2_button = obs.obs_properties_add_button(props, "toggle_config2",
+                                           "Show Configuration 2", toggle_config2_visibility)
+    
+    # Create Config 2 Properties Group (without title)
+    config2_props = create_config_properties(2)
+    config2_group = obs.obs_properties_add_group(props, "config2", "", obs.OBS_GROUP_NORMAL, config2_props)
+    # Set initial visibility based on global state
+    obs.obs_property_set_visible(config2_group, g_show_config2)
+    
+    # Global Settings Group (moved to bottom)
     global_group = obs.obs_properties_create()
     
     # Add update FPS slider to global settings
@@ -1566,17 +1676,10 @@ def script_properties():
     # Add the global group to the main properties
     obs.obs_properties_add_group(props, "global_settings", "Global Settings", obs.OBS_GROUP_NORMAL, global_group)
     
-    # Create Config 1 Properties Group
-    config1_props = create_config_properties(1)
-    obs.obs_properties_add_group(props, "config1", "Configuration 1", obs.OBS_GROUP_NORMAL, config1_props)
-    
-    # Create Config 2 Properties Group
-    config2_props = create_config_properties(2)
-    obs.obs_properties_add_group(props, "config2", "Configuration 2", obs.OBS_GROUP_NORMAL, config2_props)
-    
     obs.obs_properties_add_text(props, "info_text",
                              "Visit <a href='https://github.com/ToxMox/ToxMoxPanZoomer'>https://github.com/ToxMox/ToxMoxPanZoomer</a> for latest version of the script.",
                              obs.OBS_TEXT_INFO)
+    
     return props
 
 # Helper function to create config-specific properties
@@ -1627,31 +1730,70 @@ def create_config_properties(config_num):
     source_cache_key = "source_cache"
     viewport_cache_key = "viewport_cache"
     
+    # Get the current saved source and viewport values
+    saved_source_value = ""
+    saved_viewport_value = ""
+    
+    if script_settings:
+        saved_source_value = obs.obs_data_get_string(script_settings, f"{config_prefix}source_name")
+        saved_viewport_value = obs.obs_data_get_string(script_settings, f"{config_prefix}viewport_color_source_name")
+    
+    # Add "Select Source" as first option for target source
+    obs.obs_property_list_add_string(target_source_list, "Select Source", "")
+    
+    # For viewport, add "Use Scene Dimensions" if a scene is selected
+    if has_scene_selected:
+        obs.obs_property_list_add_string(viewport_list, "Use Scene Dimensions", USE_SCENE_DIMENSIONS)
+    else:
+        obs.obs_property_list_add_string(viewport_list, "Select Source", "")
+    
+    # Flag to track if we've added the saved values
+    saved_source_added = (saved_source_value == "")
+    saved_viewport_added = (saved_viewport_value == "" or saved_viewport_value == USE_SCENE_DIMENSIONS)
+    
+    # Add cached source items if available
     if source_cache_key in current_config and current_config[source_cache_key]:
-        # Add "Select Source" as first option for target source
-        obs.obs_property_list_add_string(target_source_list, "Select Source", "")
-        
-        # Add cached source items
         for source_item in current_config[source_cache_key]:
             obs.obs_property_list_add_string(target_source_list, source_item["name"], source_item["value"])
-        
-        # Make the list visible if scene is selected
-        obs.obs_property_set_visible(target_source_list, has_scene_selected)
-    else:
-        # Set initially to invisible if no cache
-        obs.obs_property_set_visible(target_source_list, False)
+            if source_item["value"] == saved_source_value:
+                saved_source_added = True
     
-    # Populate viewport dropdown with cached values if available
+    # Add cached viewport items if available
     if viewport_cache_key in current_config and current_config[viewport_cache_key]:
-        # Add cached viewport items
         for viewport_item in current_config[viewport_cache_key]:
-            obs.obs_property_list_add_string(viewport_list, viewport_item["name"], viewport_item["value"])
+            # Skip "Use Scene Dimensions" as we already added it
+            if viewport_item["value"] != USE_SCENE_DIMENSIONS:
+                obs.obs_property_list_add_string(viewport_list, viewport_item["name"], viewport_item["value"])
+                if viewport_item["value"] == saved_viewport_value:
+                    saved_viewport_added = True
+    
+    # If we haven't added the saved source value yet and it's not empty, add it
+    if not saved_source_added and saved_source_value:
+        # Parse the saved value to get the name
+        if ":" in saved_source_value:
+            source_name, _ = saved_source_value.split(":", 1)
+        else:
+            source_name = saved_source_value
         
-        # Make the list visible if scene is selected
-        obs.obs_property_set_visible(viewport_list, has_scene_selected)
-    else:
-        # Set initially to invisible if no cache
-        obs.obs_property_set_visible(viewport_list, False)
+        if source_name:
+            obs.obs_property_list_add_string(target_source_list, source_name, saved_source_value)
+            log(f"Added saved source value to dropdown: {source_name}")
+    
+    # If we haven't added the saved viewport value yet and it's not empty or USE_SCENE_DIMENSIONS, add it
+    if not saved_viewport_added and saved_viewport_value and saved_viewport_value != USE_SCENE_DIMENSIONS:
+        # Parse the saved value to get the name
+        if ":" in saved_viewport_value:
+            viewport_name, _ = saved_viewport_value.split(":", 1)
+        else:
+            viewport_name = saved_viewport_value
+        
+        if viewport_name:
+            obs.obs_property_list_add_string(viewport_list, viewport_name, saved_viewport_value)
+            log(f"Added saved viewport value to dropdown: {viewport_name}")
+    
+    # Always set visibility based on scene selection, not cache state
+    obs.obs_property_set_visible(target_source_list, has_scene_selected)
+    obs.obs_property_set_visible(viewport_list, has_scene_selected)
     
     # Add callbacks for selection changes - we'll need to implement the proper versions later
     obs.obs_property_set_modified_callback(target_source_list, on_target_source_changed)
@@ -1681,14 +1823,33 @@ def create_config_properties(config_num):
     
     # Add zoom transition sliders
     zoom_in_slider = obs.obs_properties_add_float_slider(props, f"{config_prefix}zoom_in_duration",
-                                                  "Zoom In Transition Duration",
-                                                  0.0, 1.0, 0.1)
+                                                   "Zoom In Transition Duration",
+                                                   0.0, 1.0, 0.1)
     obs.obs_property_float_set_suffix(zoom_in_slider, " sec")
     
     zoom_out_slider = obs.obs_properties_add_float_slider(props, f"{config_prefix}zoom_out_duration",
-                                                   "Zoom Out Transition Duration",
-                                                   0.0, 1.0, 0.1)
+                                                    "Zoom Out Transition Duration",
+                                                    0.0, 1.0, 0.1)
     obs.obs_property_float_set_suffix(zoom_out_slider, " sec")
+    
+    # Add deadzone sliders
+    deadzone_h_slider = obs.obs_properties_add_int_slider(props, f"{config_prefix}deadzone_h_pct",
+                                                   "Deadzone Horizontal %",
+                                                   0, 100, 1)
+    obs.obs_property_int_set_suffix(deadzone_h_slider, "%")
+    
+    deadzone_v_slider = obs.obs_properties_add_int_slider(props, f"{config_prefix}deadzone_v_pct",
+                                                   "Deadzone Vertical %",
+                                                   0, 100, 1)
+    obs.obs_property_int_set_suffix(deadzone_v_slider, "%")
+    
+    # Add transition duration sliders
+    deadzone_off_transition_slider = obs.obs_properties_add_float_slider(props, f"{config_prefix}deadzone_off_transition_duration",
+                                                   "Deadzone Off Transition Duration",
+                                                   0.0, 1.0, 0.1)
+    obs.obs_property_float_set_suffix(deadzone_off_transition_slider, " sec")
+    
+    # Removed unpause transition slider
     
     # Add viewport alignment status indicator
     current_config = config1 if config_num == 1 else config2
@@ -1707,26 +1868,40 @@ def script_defaults(settings_obj):
     # Global Settings
     obs.obs_data_set_default_int(settings_obj, "update_fps", 60)
     obs.obs_data_set_default_bool(settings_obj, "show_instructions", False)
+    obs.obs_data_set_default_bool(settings_obj, "show_config1", False)
+    obs.obs_data_set_default_bool(settings_obj, "show_config2", False)
     
     # Config 1 Defaults
     obs.obs_data_set_default_bool(settings_obj, "config1_enabled", False)
     obs.obs_data_set_default_string(settings_obj, "config1_monitor_id_string", "0:All Monitors (Virtual Screen)")
-    obs.obs_data_set_default_double(settings_obj, "config1_zoom_level", 1.0)
+    obs.obs_data_set_default_double(settings_obj, "config1_zoom_level", 1.5)
     obs.obs_data_set_default_double(settings_obj, "config1_zoom_in_duration", 0.3)
     obs.obs_data_set_default_double(settings_obj, "config1_zoom_out_duration", 0.3)
     obs.obs_data_set_default_string(settings_obj, "config1_viewport_color_source_name", USE_SCENE_DIMENSIONS)
     obs.obs_data_set_default_int(settings_obj, "config1_offset_x", 0)
     obs.obs_data_set_default_int(settings_obj, "config1_offset_y", 0)
+    obs.obs_data_set_default_bool(settings_obj, "config1_deadzone_enabled", False)
+    obs.obs_data_set_default_int(settings_obj, "config1_deadzone_h_pct", 10)
+    obs.obs_data_set_default_int(settings_obj, "config1_deadzone_v_pct", 10)
+    obs.obs_data_set_default_double(settings_obj, "config1_deadzone_off_transition_duration", 0.3)
+    obs.obs_data_set_default_bool(settings_obj, "config1_pause_enabled", False)
+    # Removed unpause transition duration default
     
     # Config 2 Defaults
     obs.obs_data_set_default_bool(settings_obj, "config2_enabled", False)
     obs.obs_data_set_default_string(settings_obj, "config2_monitor_id_string", "0:All Monitors (Virtual Screen)")
-    obs.obs_data_set_default_double(settings_obj, "config2_zoom_level", 1.0)
+    obs.obs_data_set_default_double(settings_obj, "config2_zoom_level", 1.5)
     obs.obs_data_set_default_double(settings_obj, "config2_zoom_in_duration", 0.3)
     obs.obs_data_set_default_double(settings_obj, "config2_zoom_out_duration", 0.3)
     obs.obs_data_set_default_string(settings_obj, "config2_viewport_color_source_name", USE_SCENE_DIMENSIONS)
     obs.obs_data_set_default_int(settings_obj, "config2_offset_x", 0)
     obs.obs_data_set_default_int(settings_obj, "config2_offset_y", 0)
+    obs.obs_data_set_default_bool(settings_obj, "config2_deadzone_enabled", False)
+    obs.obs_data_set_default_int(settings_obj, "config2_deadzone_h_pct", 10)
+    obs.obs_data_set_default_int(settings_obj, "config2_deadzone_v_pct", 10)
+    obs.obs_data_set_default_double(settings_obj, "config2_deadzone_off_transition_duration", 0.3)
+    obs.obs_data_set_default_bool(settings_obj, "config2_pause_enabled", False)
+    # Removed unpause transition duration default
     
     # Use our global variable to initialize config 1 monitor ID if it's not 0
     global g_selected_monitor_id1
@@ -1757,8 +1932,10 @@ def script_update(settings_obj):
     # Store the settings object for use throughout the script
     script_settings = settings_obj
     
-    # Update instructions visibility state
+    # Update visibility states
     g_show_instructions = obs.obs_data_get_bool(settings_obj, "show_instructions")
+    g_show_config1 = obs.obs_data_get_bool(settings_obj, "show_config1")
+    g_show_config2 = obs.obs_data_get_bool(settings_obj, "show_config2")
     
     # Store previous value of monitor_id before updating
     previous_monitor_id = settings["monitor_id"]
@@ -1885,6 +2062,24 @@ def script_update(settings_obj):
     config1["offset_x"] = obs.obs_data_get_int(settings_obj, "config1_offset_x")
     config1["offset_y"] = obs.obs_data_get_int(settings_obj, "config1_offset_y")
     
+    # Update deadzone settings
+    config1["deadzone_enabled"] = obs.obs_data_get_bool(settings_obj, "config1_deadzone_enabled")
+    config1["deadzone_h_pct"] = obs.obs_data_get_int(settings_obj, "config1_deadzone_h_pct")
+    config1["deadzone_v_pct"] = obs.obs_data_get_int(settings_obj, "config1_deadzone_v_pct")
+    
+    # Update deadzone transition duration
+    deadzone_off_duration1 = obs.obs_data_get_double(settings_obj, "config1_deadzone_off_transition_duration")
+    if deadzone_off_duration1 < 0.0:
+        deadzone_off_duration1 = 0.0
+    elif deadzone_off_duration1 > 1.0:
+        deadzone_off_duration1 = 1.0
+    config1["deadzone_off_transition_duration"] = deadzone_off_duration1
+    
+    # Update pause setting
+    config1["pause_enabled"] = obs.obs_data_get_bool(settings_obj, "config1_pause_enabled")
+    
+    # Removed unpause transition duration update
+    
     # Update config2 zoom settings
     zoom_level2 = obs.obs_data_get_double(settings_obj, "config2_zoom_level")
     if zoom_level2 < 1.0:
@@ -1910,6 +2105,24 @@ def script_update(settings_obj):
     # Update offset values
     config2["offset_x"] = obs.obs_data_get_int(settings_obj, "config2_offset_x")
     config2["offset_y"] = obs.obs_data_get_int(settings_obj, "config2_offset_y")
+    
+    # Update deadzone settings
+    config2["deadzone_enabled"] = obs.obs_data_get_bool(settings_obj, "config2_deadzone_enabled")
+    config2["deadzone_h_pct"] = obs.obs_data_get_int(settings_obj, "config2_deadzone_h_pct")
+    config2["deadzone_v_pct"] = obs.obs_data_get_int(settings_obj, "config2_deadzone_v_pct")
+    
+    # Update deadzone transition duration
+    deadzone_off_duration2 = obs.obs_data_get_double(settings_obj, "config2_deadzone_off_transition_duration")
+    if deadzone_off_duration2 < 0.0:
+        deadzone_off_duration2 = 0.0
+    elif deadzone_off_duration2 > 1.0:
+        deadzone_off_duration2 = 1.0
+    config2["deadzone_off_transition_duration"] = deadzone_off_duration2
+    
+    # Update pause setting
+    config2["pause_enabled"] = obs.obs_data_get_bool(settings_obj, "config2_pause_enabled")
+    
+    # Removed unpause transition duration update
     
     # For backwards compatibility - use values from config1
     settings["source_name"] = config1["source_name"]
@@ -2203,16 +2416,29 @@ def on_frontend_event(event):
             
     elif event == obs.OBS_FRONTEND_EVENT_FINISHED_LOADING:
         log("OBS_FRONTEND_EVENT_FINISHED_LOADING received")
+        global g_is_obs_loaded, g_pending_config_refresh
         g_is_obs_loaded = True
+        
+        # If refreshing is pending, do it now that OBS is fully loaded
+        if g_pending_config_refresh:
+            log("Performing delayed scene and source refresh now that OBS is fully loaded")
+            refresh_caches_for_config(config1)
+            refresh_caches_for_config(config2)
+            g_pending_config_refresh = False
+
+# Global flag to indicate UI needs refreshing on next properties display
+g_schedule_ui_refresh = False
 
 def script_load(settings_obj):
     """Called when the script is loaded in OBS"""
     # Ensure global variables are accessible
     global toggle_pan_hotkey1_id, toggle_zoom_hotkey1_id, toggle_pan_hotkey2_id, toggle_zoom_hotkey2_id
+    global toggle_deadzone_hotkey1_id, toggle_deadzone_hotkey2_id, toggle_pause_hotkey1_id, toggle_pause_hotkey2_id
     global g_current_scene_item1, g_current_scene_item2, g_is_obs_loaded, script_settings
-    global global_settings, config1, config2, source_settings1, source_settings2 
+    global global_settings, config1, config2, source_settings1, source_settings2
     global settings, source_settings # For legacy compatibility
     global g_selected_monitor_id1, g_selected_monitor_id2
+    global g_show_instructions
 
     try:
         # Store settings object for use throughout the script
@@ -2222,6 +2448,10 @@ def script_load(settings_obj):
         g_current_scene_item1 = None
         g_current_scene_item2 = None
         g_is_obs_loaded = False
+        g_show_instructions = False  # Always start with instructions hidden
+        
+        # Ensure the setting is also saved as False
+        obs.obs_data_set_bool(settings_obj, "show_instructions", False)
         
         # Load script
         log(f"Script loaded (Mouse Pan & Zoom v{SCRIPT_VERSION})")
@@ -2303,12 +2533,19 @@ def script_load(settings_obj):
         # Initialize hotkey IDs to None
         toggle_pan_hotkey1_id, toggle_zoom_hotkey1_id = None, None
         toggle_pan_hotkey2_id, toggle_zoom_hotkey2_id = None, None
+        toggle_deadzone_hotkey1_id, toggle_deadzone_hotkey2_id = None, None
+        toggle_pause_hotkey1_id, toggle_pause_hotkey2_id = None, None
 
         # Register hotkeys
         toggle_pan_hotkey1_id = obs.obs_hotkey_register_frontend("mouse_pan_zoom_toggle_pan1", "Toggle ToxMox Pan Zoomer - Config 1 - Panning", toggle_panning1)
         toggle_zoom_hotkey1_id = obs.obs_hotkey_register_frontend("mouse_pan_zoom_toggle_zoom1", "Toggle ToxMox Pan Zoomer - Config 1 - Zooming", toggle_zooming1)
+        toggle_deadzone_hotkey1_id = obs.obs_hotkey_register_frontend("mouse_pan_zoom_toggle_deadzone1", "Toggle ToxMox Pan Zoomer - Config 1 - Deadzone", toggle_deadzone1)
+        toggle_pause_hotkey1_id = obs.obs_hotkey_register_frontend("mouse_pan_zoom_toggle_pause1", "Toggle ToxMox Pan Zoomer - Config 1 - Pause", toggle_pause1)
+        
         toggle_pan_hotkey2_id = obs.obs_hotkey_register_frontend("mouse_pan_zoom_toggle_pan2", "Toggle ToxMox Pan Zoomer - Config 2 - Panning", toggle_panning2)
         toggle_zoom_hotkey2_id = obs.obs_hotkey_register_frontend("mouse_pan_zoom_toggle_zoom2", "Toggle ToxMox Pan Zoomer - Config 2 - Zooming", toggle_zooming2)
+        toggle_deadzone_hotkey2_id = obs.obs_hotkey_register_frontend("mouse_pan_zoom_toggle_deadzone2", "Toggle ToxMox Pan Zoomer - Config 2 - Deadzone", toggle_deadzone2)
+        toggle_pause_hotkey2_id = obs.obs_hotkey_register_frontend("mouse_pan_zoom_toggle_pause2", "Toggle ToxMox Pan Zoomer - Config 2 - Pause", toggle_pause2)
 
         # Load hotkey bindings from saved settings
         if toggle_pan_hotkey1_id: 
@@ -2319,13 +2556,22 @@ def script_load(settings_obj):
             arr = obs.obs_data_get_array(settings_obj, "toggle_pan_hotkey2"); obs.obs_hotkey_load(toggle_pan_hotkey2_id, arr); obs.obs_data_array_release(arr)
         if toggle_zoom_hotkey2_id:
             arr = obs.obs_data_get_array(settings_obj, "toggle_zoom_hotkey2"); obs.obs_hotkey_load(toggle_zoom_hotkey2_id, arr); obs.obs_data_array_release(arr)
+        if toggle_deadzone_hotkey1_id:
+            arr = obs.obs_data_get_array(settings_obj, "toggle_deadzone_hotkey1"); obs.obs_hotkey_load(toggle_deadzone_hotkey1_id, arr); obs.obs_data_array_release(arr)
+        if toggle_pause_hotkey1_id:
+            arr = obs.obs_data_get_array(settings_obj, "toggle_pause_hotkey1"); obs.obs_hotkey_load(toggle_pause_hotkey1_id, arr); obs.obs_data_array_release(arr)
+        if toggle_deadzone_hotkey2_id:
+            arr = obs.obs_data_get_array(settings_obj, "toggle_deadzone_hotkey2"); obs.obs_hotkey_load(toggle_deadzone_hotkey2_id, arr); obs.obs_data_array_release(arr)
+        if toggle_pause_hotkey2_id:
+            arr = obs.obs_data_get_array(settings_obj, "toggle_pause_hotkey2"); obs.obs_hotkey_load(toggle_pause_hotkey2_id, arr); obs.obs_data_array_release(arr)
 
         # Defer these UI/state update calls until after critical setup and hotkey registration
         update_selected_monitor() # Uses legacy `settings` (config1)
         
-        # Refresh caches for both configurations based on loaded settings
-        refresh_caches_for_config(config1)
-        refresh_caches_for_config(config2)
+        # Mark configs for refresh after OBS is fully loaded
+        global g_pending_config_refresh
+        g_pending_config_refresh = True
+        log("Scene and source refresh scheduled to occur after OBS is fully loaded")
 
         # Calculate timer interval and start timer
         update_interval_ms = int(1000 / global_settings.get("update_fps", 60))
@@ -2342,6 +2588,7 @@ def script_save(settings_obj):
     """Save script settings and hotkey bindings"""
     # Ensure global hotkey IDs are accessible
     global toggle_pan_hotkey1_id, toggle_zoom_hotkey1_id, toggle_pan_hotkey2_id, toggle_zoom_hotkey2_id
+    global toggle_deadzone_hotkey1_id, toggle_deadzone_hotkey2_id, toggle_pause_hotkey1_id, toggle_pause_hotkey2_id
     # Ensure global config settings are accessible for saving
     global global_settings, config1, config2, g_selected_monitor_id1, g_selected_monitor_id2, g_show_instructions
 
@@ -2384,6 +2631,12 @@ def script_save(settings_obj):
     obs.obs_data_set_double(settings_obj, "config1_zoom_out_duration", config1.get("zoom_out_duration", 0.3))
     obs.obs_data_set_int(settings_obj, "config1_offset_x", config1.get("offset_x", 0))
     obs.obs_data_set_int(settings_obj, "config1_offset_y", config1.get("offset_y", 0))
+    obs.obs_data_set_bool(settings_obj, "config1_deadzone_enabled", config1.get("deadzone_enabled", False))
+    obs.obs_data_set_int(settings_obj, "config1_deadzone_h_pct", config1.get("deadzone_h_pct", 10))
+    obs.obs_data_set_int(settings_obj, "config1_deadzone_v_pct", config1.get("deadzone_v_pct", 10))
+    obs.obs_data_set_double(settings_obj, "config1_deadzone_off_transition_duration", config1.get("deadzone_off_transition_duration", 0.3))
+    obs.obs_data_set_bool(settings_obj, "config1_pause_enabled", config1.get("pause_enabled", False))
+    # Removed unpause transition duration save
     
     monitor_id1 = config1.get("monitor_id", 0)
     monitors = get_monitor_info() # Re-fetch to ensure names are current
@@ -2426,6 +2679,12 @@ def script_save(settings_obj):
     obs.obs_data_set_double(settings_obj, "config2_zoom_out_duration", config2.get("zoom_out_duration", 0.3))
     obs.obs_data_set_int(settings_obj, "config2_offset_x", config2.get("offset_x", 0))
     obs.obs_data_set_int(settings_obj, "config2_offset_y", config2.get("offset_y", 0))
+    obs.obs_data_set_bool(settings_obj, "config2_deadzone_enabled", config2.get("deadzone_enabled", False))
+    obs.obs_data_set_int(settings_obj, "config2_deadzone_h_pct", config2.get("deadzone_h_pct", 10))
+    obs.obs_data_set_int(settings_obj, "config2_deadzone_v_pct", config2.get("deadzone_v_pct", 10))
+    obs.obs_data_set_double(settings_obj, "config2_deadzone_off_transition_duration", config2.get("deadzone_off_transition_duration", 0.3))
+    obs.obs_data_set_bool(settings_obj, "config2_pause_enabled", config2.get("pause_enabled", False))
+    # Removed unpause transition duration save
 
     monitor_id2 = config2.get("monitor_id", 0)
     monitor_name2 = "All Monitors (Virtual Screen)" # Default
@@ -2449,6 +2708,18 @@ def script_save(settings_obj):
                 obs.obs_data_set_array(settings_obj, "toggle_zoom_hotkey1", zoom_hotkey1_save_array)
                 obs.obs_data_array_release(zoom_hotkey1_save_array)
         
+        if toggle_deadzone_hotkey1_id is not None:
+            deadzone_hotkey1_save_array = obs.obs_hotkey_save(toggle_deadzone_hotkey1_id)
+            if deadzone_hotkey1_save_array:
+                obs.obs_data_set_array(settings_obj, "toggle_deadzone_hotkey1", deadzone_hotkey1_save_array)
+                obs.obs_data_array_release(deadzone_hotkey1_save_array)
+        
+        if toggle_pause_hotkey1_id is not None:
+            pause_hotkey1_save_array = obs.obs_hotkey_save(toggle_pause_hotkey1_id)
+            if pause_hotkey1_save_array:
+                obs.obs_data_set_array(settings_obj, "toggle_pause_hotkey1", pause_hotkey1_save_array)
+                obs.obs_data_array_release(pause_hotkey1_save_array)
+        
         if toggle_pan_hotkey2_id is not None:
             pan_hotkey2_save_array = obs.obs_hotkey_save(toggle_pan_hotkey2_id)
             if pan_hotkey2_save_array:
@@ -2460,6 +2731,18 @@ def script_save(settings_obj):
             if zoom_hotkey2_save_array:
                 obs.obs_data_set_array(settings_obj, "toggle_zoom_hotkey2", zoom_hotkey2_save_array)
                 obs.obs_data_array_release(zoom_hotkey2_save_array)
+        
+        if toggle_deadzone_hotkey2_id is not None:
+            deadzone_hotkey2_save_array = obs.obs_hotkey_save(toggle_deadzone_hotkey2_id)
+            if deadzone_hotkey2_save_array:
+                obs.obs_data_set_array(settings_obj, "toggle_deadzone_hotkey2", deadzone_hotkey2_save_array)
+                obs.obs_data_array_release(deadzone_hotkey2_save_array)
+        
+        if toggle_pause_hotkey2_id is not None:
+            pause_hotkey2_save_array = obs.obs_hotkey_save(toggle_pause_hotkey2_id)
+            if pause_hotkey2_save_array:
+                obs.obs_data_set_array(settings_obj, "toggle_pause_hotkey2", pause_hotkey2_save_array)
+                obs.obs_data_array_release(pause_hotkey2_save_array)
     except Exception as e:
         log_error(f"Error saving hotkeys: {e}")
     
@@ -2565,28 +2848,15 @@ def perform_ultra_aggressive_cleanup():
     except Exception as e:
         log_error(f"Error during ultra garbage collection: {e}")
     
-    # 4. Try to clear any remaining references in the module
-    try:
-        # Clear any module-level references that might be holding OBS objects
-        import sys
-        this_module = sys.modules.get(__name__)
-        if this_module:
-            for attr_name in dir(this_module):
-                if attr_name.startswith('__'):
-                    continue
-                try:
-                    if hasattr(this_module, attr_name):
-                        setattr(this_module, attr_name, None)
-                except Exception:
-                    pass
-    except Exception as e:
-        log_error(f"Error clearing module references: {e}")
+    # DO NOT try to manipulate the module in sys.modules
+    # Let OBS handle the reloading process naturally
 
 def script_unload():
     """Clean up when script is unloaded"""
     # Access all necessary globals for cleanup
     global g_current_scene_item1, g_current_scene_item2, script_settings # script_settings might be None if load failed
     global toggle_pan_hotkey1_id, toggle_zoom_hotkey1_id, toggle_pan_hotkey2_id, toggle_zoom_hotkey2_id
+    global toggle_deadzone_hotkey1_id, toggle_deadzone_hotkey2_id, toggle_pause_hotkey1_id, toggle_pause_hotkey2_id
     global config1, config2, source_settings1, source_settings2, global_settings
 
     log("Script unload started")
@@ -2612,6 +2882,18 @@ def script_unload():
         if toggle_zoom_hotkey2_id is not None:
             obs.obs_hotkey_unregister(toggle_zoom_hotkey2_id)
             toggle_zoom_hotkey2_id = None
+        if toggle_deadzone_hotkey1_id is not None:
+            obs.obs_hotkey_unregister(toggle_deadzone_hotkey1_id)
+            toggle_deadzone_hotkey1_id = None
+        if toggle_pause_hotkey1_id is not None:
+            obs.obs_hotkey_unregister(toggle_pause_hotkey1_id)
+            toggle_pause_hotkey1_id = None
+        if toggle_deadzone_hotkey2_id is not None:
+            obs.obs_hotkey_unregister(toggle_deadzone_hotkey2_id)
+            toggle_deadzone_hotkey2_id = None
+        if toggle_pause_hotkey2_id is not None:
+            obs.obs_hotkey_unregister(toggle_pause_hotkey2_id)
+            toggle_pause_hotkey2_id = None
         log("Hotkeys unregistered")
     except Exception as e:
         log_error(f"Error unregistering hotkeys: {e}")
@@ -2703,11 +2985,29 @@ def script_unload():
     try:
         import gc
         gc.collect()
-        log("Garbage collection performed")
+        # Run multiple collections to ensure everything is cleaned up
+        gc.collect(2)  # Full collection
+        gc.collect(2)  # Run again to catch anything missed
+        log("Aggressive garbage collection performed")
     except Exception as e:
         log_error(f"Error during garbage collection: {e}")
     
-    log(f"Script unload completed (Mouse Pan & Zoom v{SCRIPT_VERSION})")
+    # Store the final log message before we clear the module
+    final_log_message = f"Script unload completed (Mouse Pan & Zoom v{SCRIPT_VERSION})"
+    
+    # Force Python to run garbage collection one more time
+    try:
+        import gc
+        gc.collect(2)  # Full collection
+        log("Final garbage collection performed")
+    except Exception as e:
+        log_error(f"Error during final garbage collection: {e}")
+    
+    # Log the final message
+    log(final_log_message)
+    
+    # DO NOT try to manipulate the module in sys.modules
+    # Let OBS handle the reloading process naturally
 
 # Button callbacks
 
@@ -3369,6 +3669,10 @@ def update_pan_and_zoom_for_config(config, src_settings, current_scene_item):
             src_settings["is_transitioning"] = False
         return
     
+    # Skip if pause is enabled - freeze all panning and zooming
+    if config.get("pause_enabled", False):
+        return
+    
     # Check if we have viewport dimensions and a valid cached scene item
     if src_settings["viewport_width"] <= 0 or src_settings["viewport_height"] <= 0:
         return
@@ -3388,46 +3692,145 @@ def update_pan_and_zoom_for_config(config, src_settings, current_scene_item):
         log_error("Viewport center not captured. Please re-toggle panning.")
         return
     
-    # --- Zoom transition handling ---
+    # --- Transition handling ---
     current_zoom_level = 1.0  # Default to 1.0 when no zoom
     
-    # Only apply zoom if zoom is enabled or we're in a zoom transition
-    if config["zoom_enabled"] or src_settings["is_transitioning"]:
+    # First, determine the zoom level
+    # If zoom is enabled, use the configured zoom level
+    if config["zoom_enabled"]:
         current_zoom_level = config["zoom_level"]
+    
+    # Check if we're in a transition
+    if src_settings["is_transitioning"]:
+        # Get the transition type
+        transition_type = src_settings.get("transition_type", "zoom")
         
-        # Check if we're in a zoom transition
-        if src_settings["is_transitioning"]:
-            # Calculate how far we are in the transition
-            elapsed_time = time.time() - src_settings["transition_start_time"]
-            transition_duration = src_settings["transition_duration"]
+        # Calculate how far we are in the transition
+        elapsed_time = time.time() - src_settings["transition_start_time"]
+        transition_duration = src_settings["transition_duration"]
+        
+        # Calculate progress (0.0 to 1.0)
+        progress = min(1.0, elapsed_time / transition_duration)
+        
+        # Apply easing for a smooth transition
+        eased_progress = ease_in_out_quad(progress)
+        
+        # Handle different types of transitions
+        if transition_type == "deadzone_off":
+            # For deadzone_off transitions, we're transitioning mouse position
+            # Interpolate between start and target positions
+            start_x = src_settings.get("transition_start_x", 0.5)
+            start_y = src_settings.get("transition_start_y", 0.5)
+            target_x = src_settings.get("transition_target_x", 0.5)
+            target_y = src_settings.get("transition_target_y", 0.5)
             
-            # Calculate progress (0.0 to 1.0)
-            progress = min(1.0, elapsed_time / transition_duration)
+            # Store the interpolated position for use in calculations
+            mouse_x_pct = start_x + (target_x - start_x) * eased_progress
+            mouse_y_pct = start_y + (target_y - start_y) * eased_progress
+            original_mouse_x_pct = mouse_x_pct
+            original_mouse_y_pct = mouse_y_pct
             
-            # Apply easing for a smooth transition
-            eased_progress = ease_in_out_quad(progress)
+            # If we're transitioning from deadzone, update the deadzone center
+            if transition_type == "deadzone_off":
+                src_settings["deadzone_center_x"] = mouse_x_pct
+                src_settings["deadzone_center_y"] = mouse_y_pct
             
+            # Check if transition is complete
+            if progress >= 1.0:
+                src_settings["is_transitioning"] = False
+                # Make sure deadzone is disabled
+                config["deadzone_enabled"] = False
+        elif transition_type == "zoom":
+            # For zoom transitions
             # Interpolate between start and target zoom
-            start_zoom = src_settings["transition_start_zoom"]
-            target_zoom = src_settings["transition_target_zoom"]
+            start_zoom = src_settings.get("transition_start_zoom", 1.0)
+            target_zoom = src_settings.get("transition_target_zoom", 1.0)
             current_zoom_level = start_zoom + (target_zoom - start_zoom) * eased_progress
-            
-            # Debug logging removed
             
             # Check if transition is complete
             if progress >= 1.0:
                 src_settings["is_transitioning"] = False
                 current_zoom_level = target_zoom  # Ensure we land exactly on target
     
-    # --- Get mouse position and monitor bounds --- 
-    mouse_data = get_adjusted_mouse_pos(config)
+    # --- Get mouse position and monitor bounds ---
+    # Only get the mouse position if we're not already using interpolated positions from a deadzone_off transition
+    if not (src_settings["is_transitioning"] and src_settings.get("transition_type", "") == "deadzone_off"):
+        mouse_data = get_adjusted_mouse_pos(config)
+        
+        # Skip if mouse is outside the selected monitor
+        if not mouse_data["is_inside_monitor"]:
+            return
+        
+        # Get the mouse position
+        original_mouse_x_pct = mouse_data["x_pct"]
+        original_mouse_y_pct = mouse_data["y_pct"]
+        
+        # Store the original mouse position for use in calculations
+        mouse_x_pct = original_mouse_x_pct
+        mouse_y_pct = original_mouse_y_pct
     
-    # Skip if mouse is outside the selected monitor
-    if not mouse_data["is_inside_monitor"]:
-        return
-    
-    mouse_x_pct = mouse_data["x_pct"]
-    mouse_y_pct = mouse_data["y_pct"]
+    # If deadzone is enabled, we need to handle it specially
+    if config.get("deadzone_enabled", False):
+        # Calculate deadzone size as percentage of viewport
+        deadzone_h_pct = config.get("deadzone_h_pct", 10) / 100.0
+        deadzone_v_pct = config.get("deadzone_v_pct", 10) / 100.0
+        
+        # Adjust deadzone size based on zoom level to keep it proportional to the source size
+        # This prevents the deadzone from appearing larger when zoomed in
+        if current_zoom_level > 0:  # Prevent division by zero
+            deadzone_h_pct = deadzone_h_pct / current_zoom_level
+            deadzone_v_pct = deadzone_v_pct / current_zoom_level
+        
+        # Calculate deadzone half-width and half-height
+        deadzone_half_width = deadzone_h_pct / 2.0
+        deadzone_half_height = deadzone_v_pct / 2.0
+        
+        # We need to store the deadzone center in the source_settings
+        # If it doesn't exist yet, initialize it to the center (0.5, 0.5)
+        if "deadzone_center_x" not in src_settings:
+            src_settings["deadzone_center_x"] = 0.5
+            src_settings["deadzone_center_y"] = 0.5
+        
+        # Get the current deadzone center
+        deadzone_center_x = src_settings["deadzone_center_x"]
+        deadzone_center_y = src_settings["deadzone_center_y"]
+        
+        # Calculate deadzone boundaries
+        deadzone_left = deadzone_center_x - deadzone_half_width
+        deadzone_right = deadzone_center_x + deadzone_half_width
+        deadzone_top = deadzone_center_y - deadzone_half_height
+        deadzone_bottom = deadzone_center_y + deadzone_half_height
+        
+        # Check if mouse is outside deadzone
+        if original_mouse_x_pct < deadzone_left:
+            # Mouse is pushing left edge of deadzone
+            # Update the deadzone center to keep the mouse at the edge
+            deadzone_center_x = original_mouse_x_pct + deadzone_half_width
+            # Use the deadzone center for panning
+            mouse_x_pct = deadzone_center_x
+        elif original_mouse_x_pct > deadzone_right:
+            # Mouse is pushing right edge of deadzone
+            deadzone_center_x = original_mouse_x_pct - deadzone_half_width
+            mouse_x_pct = deadzone_center_x
+        else:
+            # Mouse is within horizontal deadzone, use deadzone center
+            mouse_x_pct = deadzone_center_x
+            
+        if original_mouse_y_pct < deadzone_top:
+            # Mouse is pushing top edge of deadzone
+            deadzone_center_y = original_mouse_y_pct + deadzone_half_height
+            mouse_y_pct = deadzone_center_y
+        elif original_mouse_y_pct > deadzone_bottom:
+            # Mouse is pushing bottom edge of deadzone
+            deadzone_center_y = original_mouse_y_pct - deadzone_half_height
+            mouse_y_pct = deadzone_center_y
+        else:
+            # Mouse is within vertical deadzone, use deadzone center
+            mouse_y_pct = deadzone_center_y
+        
+        # Store the updated deadzone center
+        src_settings["deadzone_center_x"] = deadzone_center_x
+        src_settings["deadzone_center_y"] = deadzone_center_y
     
     # --- Source information ---
     
@@ -3693,6 +4096,128 @@ def toggle_zooming1(pressed):
 def toggle_zooming2(pressed):
     """Toggle zooming on or off for config 2"""
     toggle_zooming_for_config(pressed, config2, source_settings2, g_current_scene_item2, 2)
+
+# Toggle deadzone on/off for config 1
+def toggle_deadzone1(pressed):
+    """Toggle deadzone on or off for config 1"""
+    toggle_deadzone_for_config(pressed, config1, 1)
+
+# Toggle deadzone on/off for config 2
+def toggle_deadzone2(pressed):
+    """Toggle deadzone on or off for config 2"""
+    toggle_deadzone_for_config(pressed, config2, 2)
+
+# Toggle pause on/off for config 1
+def toggle_pause1(pressed):
+    """Toggle pause on or off for config 1"""
+    toggle_pause_for_config(pressed, config1, 1)
+
+# Toggle pause on/off for config 2
+def toggle_pause2(pressed):
+    """Toggle pause on or off for config 2"""
+    toggle_pause_for_config(pressed, config2, 2)
+
+# Generic toggle_deadzone function that works with any config
+def toggle_deadzone_for_config(pressed, config, config_num):
+    """Toggle deadzone on or off for a specific config"""
+    # Immediate bail if not pressed
+    if not pressed:
+        return
+    
+    # Check if this config is enabled
+    if not config.get("enabled", False):
+        log(f"Config {config_num}: Cannot toggle deadzone: Config is disabled")
+        return
+    
+    # Check if panning is enabled (required for deadzone)
+    if not config.get("pan_enabled", False):
+        log(f"Config {config_num}: Cannot toggle deadzone: Panning must be enabled first")
+        return
+    
+    # Get the appropriate source settings
+    src_settings = source_settings1 if config_num == 1 else source_settings2
+    
+    # Toggle deadzone state
+    was_enabled = config.get("deadzone_enabled", False)
+    config["deadzone_enabled"] = not was_enabled
+    
+    if config["deadzone_enabled"]:
+        # When enabling deadzone, initialize the deadzone center to the current mouse position
+        # Get the current mouse position
+        mouse_data = get_adjusted_mouse_pos(config)
+        if mouse_data["is_inside_monitor"]:
+            src_settings["deadzone_center_x"] = mouse_data["x_pct"]
+            src_settings["deadzone_center_y"] = mouse_data["y_pct"]
+        else:
+            # If mouse is outside monitor, use center
+            src_settings["deadzone_center_x"] = 0.5
+            src_settings["deadzone_center_y"] = 0.5
+            
+        log(f"Config {config_num}: Deadzone ENABLED (H: {config['deadzone_h_pct']}%, V: {config['deadzone_v_pct']}%)")
+        log(f"Config {config_num}: Mouse pushes the deadzone rectangle to pan the source")
+    else:
+        log(f"Config {config_num}: Deadzone DISABLED - Source will smoothly transition to mouse position over {config.get('deadzone_off_transition_duration', 0.3)}s")
+        
+        # Get the current scene item
+        current_scene_item = g_current_scene_item1 if config_num == 1 else g_current_scene_item2
+        
+        # When disabling deadzone, start a transition to smoothly return to the mouse position
+        if current_scene_item:
+            # Get the current mouse position
+            mouse_data = get_adjusted_mouse_pos(config)
+            if mouse_data["is_inside_monitor"]:
+                # Store the current deadzone center as the start position
+                src_settings["transition_start_x"] = src_settings.get("deadzone_center_x", 0.5)
+                src_settings["transition_start_y"] = src_settings.get("deadzone_center_y", 0.5)
+                
+                # Store the current mouse position as the target position
+                src_settings["transition_target_x"] = mouse_data["x_pct"]
+                src_settings["transition_target_y"] = mouse_data["y_pct"]
+                
+                # Set up a transition similar to zoom transitions
+                src_settings["is_transitioning"] = True
+                src_settings["transition_start_time"] = time.time()
+                src_settings["transition_duration"] = config.get("deadzone_off_transition_duration", 0.3)
+                src_settings["transition_type"] = "deadzone_off"
+                
+                log(f"Config {config_num}: Starting transition from ({src_settings['transition_start_x']:.3f}, {src_settings['transition_start_y']:.3f}) to ({src_settings['transition_target_x']:.3f}, {src_settings['transition_target_y']:.3f})")
+            else:
+                # If mouse is outside monitor, just disable deadzone without transition
+                log(f"Config {config_num}: Mouse outside monitor, disabling deadzone without transition")
+                src_settings["is_transitioning"] = False
+
+# Generic toggle_pause function that works with any config
+def toggle_pause_for_config(pressed, config, config_num):
+    """Toggle pause on or off for a specific config"""
+    # Immediate bail if not pressed
+    if not pressed:
+        return
+    
+    # Check if this config is enabled
+    if not config.get("enabled", False):
+        log(f"Config {config_num}: Cannot toggle pause: Config is disabled")
+        return
+    
+    # Check if panning is enabled (required for pause)
+    if not config.get("pan_enabled", False):
+        log(f"Config {config_num}: Cannot toggle pause: Panning must be enabled first")
+        return
+    
+    # Get the appropriate scene item and source settings
+    current_scene_item = g_current_scene_item1 if config_num == 1 else g_current_scene_item2
+    src_settings = source_settings1 if config_num == 1 else source_settings2
+    
+    # Toggle pause state
+    was_paused = config.get("pause_enabled", False)
+    config["pause_enabled"] = not was_paused
+    
+    if config["pause_enabled"]:
+        log(f"Config {config_num}: Pause ENABLED - Panning and zooming temporarily frozen")
+    else:
+        log(f"Config {config_num}: Pause DISABLED - Source will immediately follow mouse position")
+        
+        # Simply disable pause without any transition
+        config["pause_enabled"] = False
 
 # Helper function to check viewport alignment (Top Left)
 def check_viewport_alignment(viewport_scene_item, source_name, config_num):
@@ -4378,6 +4903,8 @@ def toggle_zooming_for_config(pressed, config, src_settings, current_scene_item,
         # Set up the transition
         src_settings["is_transitioning"] = True
         src_settings["transition_start_time"] = time.time()
+        src_settings["transition_type"] = "zoom"
+        src_settings["transition_type"] = "zoom"
         
         if new_zoom_enabled:
             # Transitioning from 1.0 to zoom_level (zoom IN)
