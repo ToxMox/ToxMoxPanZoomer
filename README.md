@@ -22,7 +22,7 @@ A powerful Python script for OBS Studio that enables smooth mouse-controlled pan
 
 Script settings example:
 
-<img src="https://github.com/user-attachments/assets/e4884818-1edd-4e21-947d-23783d63eb72" width="400px">
+<img src="https://github.com/user-attachments/assets/961ae985-34ee-432c-858a-610b56273b21" width="400px">
 
 Quick basic demo (just shows simple panning and zooming, I'll make some more demo videos eventually showing Deadzone, Offsets, and Pause features etc.):
 
