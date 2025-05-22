@@ -2,7 +2,7 @@
 
 A powerful Python script for OBS Studio that enables smooth mouse-controlled panning and zooming for display sources. Track your mouse position to control which part of your content is displayed, with customizable zoom transition speed.
 
-**Version: 10.4.9**
+**Version: 10.6.4**
 
 ## Features
 
@@ -12,7 +12,7 @@ A powerful Python script for OBS Studio that enables smooth mouse-controlled pan
 - **Smooth Transitions**: Simple smooth transitions when toggling zoom with configurable durations
 - **Multi-Monitor Support**: Enhanced detection and support for multiple displays with proper monitor selection
 - **Performance Optimized**: Configurable update frequency (30-240 FPS)
-- **Flexible Viewport Definition**: Define the panning area using a color source or use scene dimensions directly
+- **Flexible Viewport Definition**: Define the panning area using a Color Source or use scene dimensions directly
 - **Hotkey Control**: Toggle panning, zooming, deadzone, and pause using customizable OBS hotkeys for each configuration
 - **Direct Source Mode**: Support for plugin sources
 - **Offset Support**: Allow changing the mouse tracking center point inside the viewport
@@ -51,8 +51,8 @@ Each configuration allows you to control a separate source with these settings:
 
 1. **Enable Config**: Master switch for this configuration set
 2. **Target Scene**: Select which scene contains your sources
-3. **Target Source**: Select which source you want to pan and zoom
-4. **Viewport Source**: Either:
+3. **Target Display Capture Source**: Select which Display Capture source you want to pan and zoom
+4. **Viewport Color Source**: Either:
    - Select a Color Source that defines the panning area
    - Use "Use Scene Dimensions" to use the entire scene as the viewport
 5. **Target Monitor**: Choose which monitor to track mouse movement on
@@ -70,9 +70,9 @@ Each configuration allows you to control a separate source with these settings:
 
 ## Setup and Usage
 
-1. Select **Target Scene**, **Target Source** to Pan/Zoom, **Viewport Source** from dropdowns.
+1. Select **Target Scene**, **Target Display Capture Source** to Pan/Zoom, **Viewport Color Source** from dropdowns.
 2. The script will set target source's **Positional Alignment** to **Center** (via Edit Transform)
-3. Viewport Source needs Top Left setting for Positional Alignment (this is default when adding sources)
+3. **Viewport Source** can use **Scene Dimensions** or a **Color Source** (requires **Top Left** **Positional Alignment** which is default when adding sources)
 4. Select the **Target Monitor** to track the mouse on.
 5. Adjust **Offset X/Y** values to shift the panning center if desired.
 6. Configure **Deadzone** percentages to create an area where mouse movement doesn't affect panning.
@@ -92,6 +92,11 @@ Each configuration allows you to control a separate source with these settings:
 
 When panning is active, your mouse position determines which part of the source is shown within the viewport area. Zooming works in conjunction with panning and scales the content around your mouse position.
 
+## Warnings
+
+- Script only supports **Display Capture sources** for **Target Source** and only **Color Sources** for **Viewport Source**. They must exist in the **root** of the **Target Scene** (**Groups are not supported**)
+- Recommend backing up your **Scene Collection** before using the script just in case it does something you don't like and need to revert
+
 ## Tips
 
 - You can now control two different sources independently using Config 1 and Config 2
@@ -110,11 +115,13 @@ When panning is active, your mouse position determines which part of the source 
 - If OBS crashes on startup, check your Python installation is compatible
 - If viewport alignment is incorrect, you'll see a warning in the script UI - set the viewport source alignment to Top Left in Edit Transform
 - If sources aren't appearing in dropdowns, use the "Refresh Scenes and Sources" button
+- If you don't see any sources in the Target Display Capture Source dropdown, make sure you have Display Capture sources in your scene
+- If you don't see any sources in the Viewport Color Source dropdown, make sure you have Color Sources in your scene
 
 ## Acknowledgements
 
 - Huge thanks to Jhuderis of BEACN who inspired me to make this script, gave me feature ideas, and helped test. Check out https://www.beacn.com/ for some awesome audio equipment geared towards streamers!
-- This script was inspired by https://github.com/BlankSourceCode/obs-zoom-to-mouse
+- This script was also inspired by https://github.com/BlankSourceCode/obs-zoom-to-mouse
 - I am not a programmer. Just a very technical person who kind of undestands code. This script was generated largely by AI.
 
 ## License
