@@ -11,7 +11,7 @@ Copyright (c) 2025
 """
 
 # Global version number - increment after every change
-SCRIPT_VERSION = "10.4.9"
+SCRIPT_VERSION = "10.6.7"
 
 import obspython as obs
 import ctypes
@@ -1518,26 +1518,51 @@ g_show_config1 = False  # Track if Configuration 1 is visible (hidden by default
 g_show_config2 = False  # Track if Configuration 2 is visible (hidden by default)
 
 # Store setup instructions text
-SETUP_INSTRUCTIONS = """<div style="margin-top: 8px; margin-bottom: 10px; padding-bottom: 5px;">
-<b>1.</b> Select <b>Target Scene</b>, <b>Target Source</b> to Pan/Zoom, <b>Viewport Source</b> from dropdowns.<br>
-<b>2.</b> The script will set target source's <b>Positional Alignment</b> to <b>Center</b> (via Edit Transform)<br>
-<b>3.</b> Viewport Source needs Top Left setting for Positional Alignment, this is default when adding sources)<br>
-<b>4.</b> Select the <b>Target Monitor</b> to track the mouse on.<br>
-<b>5.</b> Adjust <b>Offset X/Y</b> values to shift the panning center if desired.<br>
-<b>6.</b> Configure <b>Deadzone</b> percentages to create an area where mouse movement doesn't affect panning.<br>
-<b>7.</b> Enable <b>Config 1 and/or Config 2</b> and set <b>Zoom Level</b> (1x-5x)<br>
-<b>8.</b> Configure <b>Transition Durations</b> for zoom and deadzone transitions.<br>
-<b>9.</b> Set <b>Update Frequency</b> in Global Settings for smoother or more efficient performance.<br>
-<b>10.</b> Use hotkeys to toggle features (configure in OBS Settings - Hotkeys):<br>
-&nbsp;&nbsp;&nbsp;&nbsp;• <b>Toggle ToxMox Pan Zoomer - Config # - Panning</b><br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Enables/disables mouse tracking (must be enabled first)<br>
-&nbsp;&nbsp;&nbsp;&nbsp;• <b>Toggle ToxMox Pan Zoomer - Config # - Zooming</b><br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Enables/disables zoom with smooth transitions<br>
-&nbsp;&nbsp;&nbsp;&nbsp;• <b>Toggle ToxMox Pan Zoomer - Config # - Deadzone</b><br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Creates a non-responsive area around mouse position<br>
-&nbsp;&nbsp;&nbsp;&nbsp;• <b>Toggle ToxMox Pan Zoomer - Config # - Pause</b><br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Freezes current position regardless of mouse movement<br>
-<b>11.</b> Note: Panning must be activated with hotkey before other features will work</div>
+SETUP_INSTRUCTIONS = """<div style="margin: 8px 0; padding: 0;">
+  <!-- Section: Setup Steps -->
+  <div style="margin-bottom: 12px;">
+    <div style="font-size: 1.1em; font-weight: bold; margin-bottom: 6px; border-bottom: 1px solid #666; padding-bottom: 3px; text-decoration: underline;">Setup Steps:</div>
+    <div>
+      <div style="margin: 4px 0;"><b>1.</b> Select <b>Target Scene</b>, <b>Target Display Capture Source</b> to Pan/Zoom, <b>Viewport Color Source</b> from dropdowns.</div>
+      <div style="margin: 4px 0;"><b>2.</b> The script will set target source's <b>Positional Alignment</b> to <b>Center</b> (via Edit Transform)</div>
+      <div style="margin: 4px 0;"><b>3.</b> <b>Viewport Source</b> can use <b>Scene Dimensions</b> or a <b>Color Source</b> (requires <b>Top Left</b> <b>Positional Alignment</b> which is default when adding sources)</div>
+      <div style="margin: 4px 0;"><b>4.</b> Select the <b>Target Monitor</b> to track the mouse on.</div>
+      <div style="margin: 4px 0;"><b>5.</b> Adjust <b>Offset X/Y</b> values to shift the panning center if desired.</div>
+      <div style="margin: 4px 0;"><b>6.</b> Configure <b>Deadzone</b> percentages to create an area where mouse movement doesn't affect panning.</div>
+      <div style="margin: 4px 0;"><b>7.</b> Enable <b>Config 1 and/or Config 2</b> and set <b>Zoom Level</b> (1x-5x)</div>
+      <div style="margin: 4px 0;"><b>8.</b> Configure <b>Transition Durations</b> for zoom and deadzone transitions.</div>
+      <div style="margin: 4px 0;"><b>9.</b> Set <b>Update Frequency</b> in Global Settings for smoother or more efficient performance.</div>
+    </div>
+  </div>
+  
+  <!-- Section: Hotkey Configuration -->
+  <div style="margin-top: 12px; margin-bottom: 12px;">
+    <div style="font-size: 1.1em; font-weight: bold; margin-bottom: 6px; border-bottom: 1px solid #666; padding-bottom: 3px; text-decoration: underline;">Hotkey Configuration:</div>
+    <div>
+      <div style="margin: 4px 0;"><b>10.</b> Use hotkeys to toggle features (configure in OBS Settings - Hotkeys):</div>
+      <div style="margin: 3px 0 0 20px;">• <b>Toggle ToxMox Pan Zoomer - Config # - Panning</b></div>
+      <div style="margin: 0 0 4px 30px;">Enables/disables mouse tracking (must be enabled first)</div>
+      <div style="margin: 3px 0 0 20px;">• <b>Toggle ToxMox Pan Zoomer - Config # - Zooming</b></div>
+      <div style="margin: 0 0 4px 30px;">Enables/disables zoom with smooth transitions</div>
+      <div style="margin: 3px 0 0 20px;">• <b>Toggle ToxMox Pan Zoomer - Config # - Deadzone</b></div>
+      <div style="margin: 0 0 4px 30px;">Creates a non-responsive area around mouse position</div>
+      <div style="margin: 3px 0 0 20px;">• <b>Toggle ToxMox Pan Zoomer - Config # - Pause</b></div>
+      <div style="margin: 0 0 4px 30px;">Freezes current position regardless of mouse movement</div>
+      <div style="margin: 4px 0;"><b>11.</b> <b>Note:</b> Panning must be activated with hotkey before other features will work</div>
+    </div>
+  </div>
+  
+  <!-- Section: Important Warnings -->
+  <div style="margin-top: 12px;">
+    <div style="font-size: 1.1em; margin-bottom: 6px; color: #ff69b4; text-decoration: underline;"><b>Important Warnings:</b></div>
+    <div style="color: #ff69b4; margin: 6px 0;">
+      ⚠ Script only supports <b>Display Capture sources</b> for <b>Target Source</b> and only <b>Color Sources</b> for <b>Viewport Source</b>. They must exist in the <b>root</b> of the <b>Target Scene</b> (<b>Groups are not supported</b>)
+    </div>
+    <div style="color: #ff69b4; margin: 6px 0;">
+      ⚠ Recommend <b>BACKING UP</b> up your <b>Scene Collection</b> before using the script just in case it does something you don't like and need to revert
+    </div>
+  </div>
+</div>
 """
 
 def toggle_instructions_visibility(props, prop):
@@ -1645,7 +1670,7 @@ def script_properties():
     toggle_config1_button = obs.obs_properties_add_button(props, "toggle_config1",
                                            "Show Configuration 1", toggle_config1_visibility)
     
-    # Create Config 1 Properties Group (without title)
+    # Create Config 1 Properties Group (without title and with compact style)
     config1_props = create_config_properties(1)
     config1_group = obs.obs_properties_add_group(props, "config1", "", obs.OBS_GROUP_NORMAL, config1_props)
     # Set initial visibility based on global state
@@ -1655,7 +1680,7 @@ def script_properties():
     toggle_config2_button = obs.obs_properties_add_button(props, "toggle_config2",
                                            "Show Configuration 2", toggle_config2_visibility)
     
-    # Create Config 2 Properties Group (without title)
+    # Create Config 2 Properties Group (without title and with compact style)
     config2_props = create_config_properties(2)
     config2_group = obs.obs_properties_add_group(props, "config2", "", obs.OBS_GROUP_NORMAL, config2_props)
     # Set initial visibility based on global state
@@ -1673,6 +1698,9 @@ def script_properties():
     # Add refresh button with improved name
     obs.obs_properties_add_button(global_group, "refresh_sources", "Refresh Scenes and Sources", refresh_sources_clicked)
     
+    # Add auto-refresh option
+    obs.obs_properties_add_bool(global_group, "auto_refresh_enabled", "Auto-refresh scenes and sources when UI opens")
+    
     # Add the global group to the main properties
     obs.obs_properties_add_group(props, "global_settings", "Global Settings", obs.OBS_GROUP_NORMAL, global_group)
     
@@ -1680,7 +1708,76 @@ def script_properties():
                              "Visit <a href='https://github.com/ToxMox/ToxMoxPanZoomer'>https://github.com/ToxMox/ToxMoxPanZoomer</a> for latest version of the script.",
                              obs.OBS_TEXT_INFO)
     
+    # If auto-refresh is enabled, refresh the scenes and sources now
+    if script_settings and obs.obs_data_get_bool(script_settings, "auto_refresh_enabled"):
+        log("Auto-refreshing scenes and sources on UI open")
+        refresh_caches_for_config(config1)
+        refresh_caches_for_config(config2)
+    
     return props
+
+# Callback for config-specific refresh buttons
+def refresh_config_sources_clicked(props, prop):
+    """Refresh scenes and sources for a specific config"""
+    try:
+        # Determine which config based on the property name
+        prop_name = obs.obs_property_name(prop)
+        config_num = 1
+        
+        if "config2_" in prop_name:
+            config_num = 2
+        
+        # Get the appropriate config
+        current_config = config1 if config_num == 1 else config2
+        
+        # Refresh caches for this config
+        log(f"Refreshing scenes and sources for Config {config_num}")
+        refresh_caches_for_config(current_config)
+        
+        # Update UI for this config
+        prefix = f"config{config_num}_"
+        
+        # Get the source lists to update
+        target_src_list = obs.obs_properties_get(props, f"{prefix}source_name")
+        viewport_src_list = obs.obs_properties_get(props, f"{prefix}viewport_color_source_name")
+        
+        if target_src_list and viewport_src_list:
+            # Clear current lists
+            obs.obs_property_list_clear(target_src_list)
+            obs.obs_property_list_clear(viewport_src_list)
+            
+            # Add a blank option at the top of the target source list
+            obs.obs_property_list_add_string(target_src_list, "Select Source", "")
+            
+            # For viewport source list
+            if current_config.get("target_scene_name"):
+                # Add 'Use Scene Dimensions' option for viewport list
+                obs.obs_property_list_add_string(viewport_src_list, "Use Scene Dimensions", USE_SCENE_DIMENSIONS)
+            else:
+                # Add blank option only if no scene is selected
+                obs.obs_property_list_add_string(viewport_src_list, "Select Source", "")
+            
+            # Add cached source items
+            if current_config.get("source_cache"):
+                for source_item in current_config.get("source_cache"):
+                    obs.obs_property_list_add_string(target_src_list, source_item["name"], source_item["value"])
+            
+            # Add cached viewport items (skip "Use Scene Dimensions" as we already added it)
+            if current_config.get("viewport_cache"):
+                for viewport_item in current_config.get("viewport_cache"):
+                    if viewport_item["value"] != USE_SCENE_DIMENSIONS:
+                        obs.obs_property_list_add_string(viewport_src_list, viewport_item["name"], viewport_item["value"])
+            
+            # Set visibility based on whether a scene is selected
+            has_scene = bool(current_config.get("target_scene_name"))
+            obs.obs_property_set_visible(target_src_list, has_scene)
+            obs.obs_property_set_visible(viewport_src_list, has_scene)
+        
+        log(f"Config {config_num} scenes and sources refreshed")
+        return True
+    except Exception as e:
+        log_error(f"Error refreshing config {config_num} sources: {e}\n{traceback.format_exc()}")
+        return False
 
 # Helper function to create config-specific properties
 def create_config_properties(config_num):
@@ -1689,7 +1786,7 @@ def create_config_properties(config_num):
     # Use the correct config prefix for property names
     config_prefix = f"config{config_num}_"
     
-    # Enable checkbox for this config
+    # Add enable checkbox directly to the properties
     obs.obs_properties_add_bool(props, f"{config_prefix}enabled", f"Enable Config {config_num}")
     
     # Target Scene dropdown
@@ -1715,11 +1812,11 @@ def create_config_properties(config_num):
     obs.obs_property_set_modified_callback(scene_list, on_target_scene_changed)
     
     # Target Source
-    target_source_list = obs.obs_properties_add_list(props, f"{config_prefix}source_name", "Target Source Name",
+    target_source_list = obs.obs_properties_add_list(props, f"{config_prefix}source_name", "Target Display Capture Source",
                                            obs.OBS_COMBO_TYPE_LIST, obs.OBS_COMBO_FORMAT_STRING)
     
     # Viewport Source
-    viewport_list = obs.obs_properties_add_list(props, f"{config_prefix}viewport_color_source_name", "Viewport Source Name",
+    viewport_list = obs.obs_properties_add_list(props, f"{config_prefix}viewport_color_source_name", "Viewport Color Source",
                                            obs.OBS_COMBO_TYPE_LIST, obs.OBS_COMBO_FORMAT_STRING)
     
     # Get current config to check if we should show the lists
@@ -1851,11 +1948,11 @@ def create_config_properties(config_num):
     
     # Removed unpause transition slider
     
-    # Add viewport alignment status indicator
+    # Add viewport alignment status indicator - more compact styling
     current_config = config1 if config_num == 1 else config2
     alignment_status = current_config.get("viewport_alignment_correct", True)
     alignment_text = "✓ Viewport alignment correct (Top Left)" if alignment_status else "⚠ VIEWPORT ALIGNMENT INCORRECT! Set to Top Left in Edit Transform"
-    alignment_style = "color: green; font-weight: bold;" if alignment_status else "color: red; font-weight: bold; background-color: #fff3cd; padding: 3px;"
+    alignment_style = "color: green; font-weight: bold; margin: 0; padding: 0;" if alignment_status else "color: red; font-weight: bold; background-color: #fff3cd; padding: 2px; margin: 0;"
     
     obs.obs_properties_add_text(props, f"{config_prefix}alignment_status",
                              f"<span style='{alignment_style}'>{alignment_text}</span>",
@@ -1870,6 +1967,7 @@ def script_defaults(settings_obj):
     obs.obs_data_set_default_bool(settings_obj, "show_instructions", False)
     obs.obs_data_set_default_bool(settings_obj, "show_config1", False)
     obs.obs_data_set_default_bool(settings_obj, "show_config2", False)
+    obs.obs_data_set_default_bool(settings_obj, "auto_refresh_enabled", True)
     
     # Config 1 Defaults
     obs.obs_data_set_default_bool(settings_obj, "config1_enabled", False)
@@ -3182,86 +3280,66 @@ def on_target_scene_changed(props, prop, settings_obj):
         current_config["target_scene_name"] = scene_name
         current_config["target_scene_uuid"] = scene_uuid
         
-        # Get the source lists to update - use the correct property IDs with prefix
-        target_source_list = obs.obs_properties_get(props, f"{config_prefix}source_name")
-        viewport_list = obs.obs_properties_get(props, f"{config_prefix}viewport_color_source_name")
+        # Perform a full refresh of scenes and sources for both configs
+        # This ensures all dropdowns are up-to-date whenever the scene changes
+        log(f"Target scene changed to '{scene_name}' - refreshing all scenes and sources")
         
-        # Clear current lists
-        obs.obs_property_list_clear(target_source_list)
-        obs.obs_property_list_clear(viewport_list)
+        # First refresh the caches for both configs
+        refresh_caches_for_config(config1)
+        refresh_caches_for_config(config2)
         
-        # Add a blank option at the top of the target source list
-        obs.obs_property_list_add_string(target_source_list, "Select Source", "")
-        
-        # For viewport source list
-        if scene_name:
-            # Add 'Use Scene Dimensions' option for viewport list
-            obs.obs_property_list_add_string(viewport_list, "Use Scene Dimensions", USE_SCENE_DIMENSIONS)
+        # Now update the UI for both configs
+        def update_ui_for_config(p, cfg_num_str, cfg):
+            prefix = f"config{cfg_num_str}_"
             
-            # Pre-select "Use Scene Dimensions" as the active option
-            current_viewport = obs.obs_data_get_string(settings_obj, f"{config_prefix}viewport_color_source_name")
-            if not current_viewport or is_use_scene_dimensions(current_viewport):
-                obs.obs_data_set_string(settings_obj, f"{config_prefix}viewport_color_source_name", USE_SCENE_DIMENSIONS)
+            # Get the source lists to update
+            target_src_list = obs.obs_properties_get(p, f"{prefix}source_name")
+            viewport_src_list = obs.obs_properties_get(p, f"{prefix}viewport_color_source_name")
             
-            # No need for a blank "Select Source" option when "Use Scene Dimensions" is available
-        else:
-            # Add blank option only if no scene is selected
-            obs.obs_property_list_add_string(viewport_list, "Select Source", "")
-        
-        # If a scene is selected, populate the dropdowns with its sources
-        if scene_name:
-            # Find the scene
-            scene_source = None
-            if scene_uuid:
-                scene_source = find_source_by_uuid(scene_uuid)
+            # Clear current lists
+            obs.obs_property_list_clear(target_src_list)
+            obs.obs_property_list_clear(viewport_src_list)
             
-            if not scene_source and scene_name:
-                # Fallback to finding by name if UUID doesn't work
-                scene_source = obs.obs_get_source_by_name(scene_name)
+            # Add a blank option at the top of the target source list
+            obs.obs_property_list_add_string(target_src_list, "Select Source", "")
             
-            if scene_source:
-                # Get scene object
-                scene = obs.obs_scene_from_source(scene_source)
-                if scene:
-                    # Enumerate all items in the scene
-                    items = obs.obs_scene_enum_items(scene)
-                    if items:
-                        for item in items:
-                            if not item:
-                                continue
-                                
-                            source = obs.obs_sceneitem_get_source(item)
-                            if not source:
-                                continue
-                                
-                            source_name = obs.obs_source_get_name(source)
-                            source_uuid = get_source_uuid(source)
-                            
-                            # Create a composite value with name and UUID
-                            composite_value = f"{source_name}:{source_uuid}"
-                            
-                            # Add to both lists
-                            obs.obs_property_list_add_string(target_source_list, source_name, composite_value)
-                            obs.obs_property_list_add_string(viewport_list, source_name, composite_value)
-                            
-                        obs.sceneitem_list_release(items)
+            # For viewport source list
+            if cfg.get("target_scene_name"):
+                # Add 'Use Scene Dimensions' option for viewport list
+                obs.obs_property_list_add_string(viewport_src_list, "Use Scene Dimensions", USE_SCENE_DIMENSIONS)
                 
-                # Release the scene source
-                obs.obs_source_release(scene_source)
+                # Pre-select "Use Scene Dimensions" as the active option
+                current_viewport = obs.obs_data_get_string(settings_obj, f"{prefix}viewport_color_source_name")
+                if not current_viewport or is_use_scene_dimensions(current_viewport):
+                    obs.obs_data_set_string(settings_obj, f"{prefix}viewport_color_source_name", USE_SCENE_DIMENSIONS)
+            else:
+                # Add blank option only if no scene is selected
+                obs.obs_property_list_add_string(viewport_src_list, "Select Source", "")
             
-            # Make the source lists visible
-            obs.obs_property_set_visible(target_source_list, True)
-            obs.obs_property_set_visible(viewport_list, True)
+            # Add cached source items
+            if cfg.get("source_cache"):
+                for source_item in cfg.get("source_cache"):
+                    obs.obs_property_list_add_string(target_src_list, source_item["name"], source_item["value"])
             
-        else:
-            # Hide the source lists if no scene is selected
-            obs.obs_property_set_visible(target_source_list, False)
-            obs.obs_property_set_visible(viewport_list, False)
+            # Add cached viewport items (skip "Use Scene Dimensions" as we already added it)
+            if cfg.get("viewport_cache"):
+                for viewport_item in cfg.get("viewport_cache"):
+                    if viewport_item["value"] != USE_SCENE_DIMENSIONS:
+                        obs.obs_property_list_add_string(viewport_src_list, viewport_item["name"], viewport_item["value"])
+            
+            # Set visibility based on whether a scene is selected
+            has_scene = bool(cfg.get("target_scene_name"))
+            obs.obs_property_set_visible(target_src_list, has_scene)
+            obs.obs_property_set_visible(viewport_src_list, has_scene)
+        
+        # Update UI for both configs
+        update_ui_for_config(props, "1", config1)
+        update_ui_for_config(props, "2", config2)
         
         # Return true to trigger a refresh of the properties
         return True
     except Exception as e:
-        log_error(f"Error in scene change callback for config {config_num}: {e}")
+        log_error(f"Error in scene change callback for config {config_num}: {e}\n{traceback.format_exc()}")
         return False
 
 # Callback for when target source is changed
@@ -4982,8 +5060,16 @@ def refresh_caches_for_config(target_config):
                     source_uuid = get_source_uuid(source_from_item)
                     composite_value = f"{source_name}:{source_uuid}"
                     
-                    source_cache.append({"name": source_name, "value": composite_value})
-                    viewport_cache.append({"name": source_name, "value": composite_value})
+                    # Get source ID to filter by type
+                    source_id = obs.obs_source_get_id(source_from_item)
+                    
+                    # Add to source cache only if it's a display capture source
+                    if source_id == "monitor_capture" or source_id == "display_capture":
+                        source_cache.append({"name": source_name, "value": composite_value})
+                    
+                    # Add to viewport cache only if it's a color source (check all possible color source IDs)
+                    if source_id == "color_source" or source_id == "color_source_v2" or source_id == "color_source_v3":
+                        viewport_cache.append({"name": source_name, "value": composite_value})
                 obs.sceneitem_list_release(items)
             
             target_config["source_cache"] = source_cache
