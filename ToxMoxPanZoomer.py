@@ -14,11 +14,13 @@ Copyright (c) 2025
 SCRIPT_VERSION = "10.6.7"
 
 import obspython as obs
+import copy
 import ctypes
 import platform
 import time
 import math
 import traceback
+import gc
 
 # Special value for scene dimensions option
 USE_SCENE_DIMENSIONS = "::USE_SCENE_DIMENSIONS::"
@@ -66,8 +68,8 @@ config1 = {
     "pause_enabled": False,     # Whether pause is enabled
 }
 
-# Config 2 settings (initially a copy of config1)
-config2 = config1.copy()
+# Config 2 settings (deep copy to avoid sharing mutable objects like lists/dicts)
+config2 = copy.deepcopy(config1)
 config2["enabled"] = False
 config2["viewport_alignment_correct"] = True # Whether viewport alignment is correct (Top Left)
 config2["deadzone_enabled"] = False
@@ -914,7 +916,6 @@ def emergency_cleanup():
 
     # Force garbage collection
     try:
-        import gc
         gc.collect()
         gc.collect()
     except Exception as e:
@@ -1432,11 +1433,10 @@ def toggle_panning(pressed):
         
         # Force garbage collection
         try:
-            import gc
             gc.collect()
         except Exception as e:
             log_error(f"Error during garbage collection: {e}")
-        
+
         log("Panning DISABLED - All resources released")
 
 # Toggle zooming on/off
@@ -2487,7 +2487,6 @@ def release_all_resources():
     
     # Force garbage collection
     try:
-        import gc
         log("Running garbage collection...")
         gc.collect(2)  # Full collection
         gc.collect(2)
@@ -2938,7 +2937,6 @@ def perform_ultra_aggressive_cleanup():
     
     # 3. Force multiple garbage collections
     try:
-        import gc
         log("Running ultra garbage collection...")
         gc.collect(2)  # Full collection
         gc.collect(2)
@@ -3079,30 +3077,16 @@ def script_unload():
     else:
         log_warning("Config2 or source_settings2 not properly initialized for unload cleanup.")
     
-    # Force garbage collection
+    # Force garbage collection (two passes: first collects, second handles finalizers)
     try:
-        import gc
-        gc.collect()
-        # Run multiple collections to ensure everything is cleaned up
         gc.collect(2)  # Full collection
-        gc.collect(2)  # Run again to catch anything missed
-        log("Aggressive garbage collection performed")
+        gc.collect(2)  # Second pass to catch items freed by finalizers
+        log("Garbage collection performed")
     except Exception as e:
         log_error(f"Error during garbage collection: {e}")
-    
-    # Store the final log message before we clear the module
-    final_log_message = f"Script unload completed (Mouse Pan & Zoom v{SCRIPT_VERSION})"
-    
-    # Force Python to run garbage collection one more time
-    try:
-        import gc
-        gc.collect(2)  # Full collection
-        log("Final garbage collection performed")
-    except Exception as e:
-        log_error(f"Error during final garbage collection: {e}")
-    
+
     # Log the final message
-    log(final_log_message)
+    log(f"Script unload completed (Mouse Pan & Zoom v{SCRIPT_VERSION})")
     
     # DO NOT try to manipulate the module in sys.modules
     # Let OBS handle the reloading process naturally
@@ -4899,7 +4883,6 @@ def toggle_panning_for_config(pressed, config, src_settings, current_scene_item,
         
         # Force garbage collection
         try:
-            import gc
             gc.collect()
         except Exception as e:
             log_error(f"Config {config_num}: Error during garbage collection: {e}")
@@ -4981,7 +4964,6 @@ def toggle_zooming_for_config(pressed, config, src_settings, current_scene_item,
         # Set up the transition
         src_settings["is_transitioning"] = True
         src_settings["transition_start_time"] = time.time()
-        src_settings["transition_type"] = "zoom"
         src_settings["transition_type"] = "zoom"
         
         if new_zoom_enabled:
